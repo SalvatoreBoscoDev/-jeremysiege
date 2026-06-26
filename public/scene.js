@@ -146,7 +146,7 @@ export function createWorld(canvas, opts = {}) {
   const gateDoor = new THREE.Mesh(new THREE.BoxGeometry(LANE.halfWidth * 2 - 2, 7.5, 2.6), new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.8, metalness: 0.15, emissive: 0x550000, emissiveIntensity: 0 }));
   gateDoor.position.y = 3.75; if (realShadows) gateDoor.castShadow = true; gateGroup.add(gateDoor);
   for (const yy of [1.75, 3.75, 5.75]) { const band = new THREE.Mesh(new THREE.BoxGeometry(LANE.halfWidth * 2 - 1, 0.8, 2.8), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.7, roughness: 0.4 })); band.position.y = yy; gateGroup.add(band); }
-  let gateFrac = 1;
+  let gateFrac = 1, gateOpenVis = false;
 
   // ---- archer towers (bought in the shop) ----
   const towerMeshes = [];
@@ -445,7 +445,7 @@ export function createWorld(canvas, opts = {}) {
     const seenF = new Set();
     for (const ff of s.friendlies || []) { const [id, x, z] = ff; seenF.add(id); const g = ensureFriendly(id); if (g.position.lengthSq() === 0) g.position.set(x, 0, z); g.userData.tx = x; g.userData.tz = z; }
     for (const [id, g] of friendlyMeshes) if (!seenF.has(id)) { scene.remove(g); friendlyMeshes.delete(id); }
-    gateFrac = (s.gate && s.gate.maxHp) ? s.gate.hp / s.gate.maxHp : 0;
+    gateFrac = (s.gate && s.gate.maxHp) ? s.gate.hp / s.gate.maxHp : 0; gateOpenVis = !!(s.gate && s.gate.open);
     syncTowers(s.towers || []);
     if (s.ramSite) { if (ramT === null) ram.position.set(s.ramSite.x, 0, s.ramSite.z); ramT = s.ramSite; ram.visible = true; } else { ram.visible = false; ramT = null; }
     cannonT = s.cannon || null;
@@ -486,7 +486,7 @@ export function createWorld(canvas, opts = {}) {
     gateGroup.visible = gateFrac > 0.001;
     const gd = 1 - gateFrac; gateDoor.material.emissiveIntensity = gd * 0.9;
     gateGroup.position.x = gateFrac > 0 && gateFrac < 1 ? Math.sin(performance.now() / 45) * gd * 0.4 : 0;
-    gateGroup.position.y = -(1 - gateFrac) * 2;
+    gateGroup.position.y = gateOpenVis ? -9 : -(1 - gateFrac) * 2;
     for (const rec of playerMeshes.values()) {
       rec.g.position.x += (rec.tx - rec.g.position.x) * k;
       rec.g.position.z += (rec.tz - rec.g.position.z) * k;
@@ -697,10 +697,10 @@ function addProps(scene, shadows) {
   const trunkGeo = new THREE.CylinderGeometry(0.6, 0.8, 5, 6); const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3322, roughness: 1 });
   const leafGeo = new THREE.ConeGeometry(3, 7, 7); const leafMat = new THREE.MeshStandardMaterial({ color: 0x1f4a25, roughness: 1 });
   const rockGeo = new THREE.IcosahedronGeometry(1.6, 0); const rockMat = new THREE.MeshStandardMaterial({ color: 0x55505e, roughness: 1, flatShading: true });
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 46; i++) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    const x = side * (LANE.halfWidth + 8 + Math.random() * 60);
-    const z = LANE.minZ - 10 + Math.random() * (LANE.maxZ - LANE.minZ + 40);
+    const x = side * (LANE.halfWidth + 12 + Math.random() * 95);
+    const z = LANE.minZ - 20 + Math.random() * (LANE.maxZ - LANE.minZ + 60);
     if (Math.random() > 0.35) {
       const g = new THREE.Group(); const tr = new THREE.Mesh(trunkGeo, trunkMat); tr.position.y = 2.5; const lf = new THREE.Mesh(leafGeo, leafMat); lf.position.y = 7; const lf2 = new THREE.Mesh(leafGeo, leafMat); lf2.position.y = 9.5; lf2.scale.setScalar(0.7);
       g.add(tr, lf, lf2); g.position.set(x, 0, z); g.scale.setScalar(0.8 + Math.random()); if (shadows) { tr.castShadow = true; lf.castShadow = true; } scene.add(g);

@@ -57,14 +57,14 @@
     <div class="blabel">KING</div><div class="bar"><div id="hpFill" style="width:100%"></div></div>
   </div>
   <div id="status"></div>
-  <div class="hint">WASD move &nbsp;•&nbsp; Left-click Catapult &nbsp;•&nbsp; Q Slam &nbsp;•&nbsp; E Sweep &nbsp;•&nbsp; R Summon</div>
+  <div class="hint">WASD move &nbsp;•&nbsp; Left-click Catapult &nbsp;•&nbsp; Q Slam &nbsp;•&nbsp; E Sweep &nbsp;•&nbsp; R Summon &nbsp;•&nbsp; F open/close GATE &amp; sally out</div>
   <div id="abilities">
     <div class="ab" data-k="cannon"><div class="k">CLICK</div><div class="n">Catapult</div><div class="cd"><div></div></div></div>
     <div class="ab" data-k="slam"><div class="k">Q</div><div class="n">Slam</div><div class="cd"><div></div></div></div>
     <div class="ab" data-k="sweep"><div class="k">E</div><div class="n">Sweep</div><div class="cd"><div></div></div></div>
     <div class="ab" data-k="summon"><div class="k">R</div><div class="n">Summon</div><div class="cd"><div></div></div></div>
   </div>
-  <div id="ctrls"><button id="startBtn">START BATTLE</button><button id="resetBtn" class="alt">Reset</button></div>
+  <div id="ctrls"><button id="gateBtn" class="alt">OPEN GATE</button><button id="startBtn">START BATTLE</button><button id="resetBtn" class="alt">Reset</button></div>
   <div id="shop">
     <h2>INTERMISSION - SHOP</h2><div class="sub" id="shopSub">Spend gold on defenses. Next round starts soon...</div>
     <div id="shopItems"></div>
@@ -105,7 +105,7 @@ const net=connect({
   },
 });
 $('#enter').onclick=()=>{ net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); world.setLocalKing(); $('#overlay').style.display='none'; startLoop(); };
-$('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'});
+$('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'}); $('#gateBtn').onclick=()=>net.send({t:'gate'});
 
 function buildShop(){ const wrap=$('#shopItems'); wrap.innerHTML=''; if(!shopCfg) return;
   for(const key of Object.keys(shopCfg)){ const it=shopCfg[key]; const el=document.createElement('div'); el.className='item'; el.dataset.k=key; el.dataset.cost=it.cost;
@@ -117,7 +117,7 @@ let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane
 addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
 addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls')) cast('cannon'); });
 addEventListener('contextmenu', e=>e.preventDefault());
-const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); keys[k]=true; });
+const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); if(k==='f' && !keys[k]) net.send({t:'gate'}); keys[k]=true; });
 addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 function cast(kind){ if(!cfg||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[kind]<cfg.attacks[kind].cd) return; lastCast[kind]=now; net.send({t:'katk',kind,x:aim.x,z:aim.z}); }
 setInterval(()=>{ if(!net.ready||!kpos) return; const a=Math.atan2(aim.x-kpos.x, aim.z-kpos.z); net.send({t:'kpos', x:+kpos.x.toFixed(2), z:+kpos.z.toFixed(2), a}); }, 40);
@@ -131,7 +131,8 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
     // CLIENT-AUTHORITATIVE King movement: simulate locally for instant response.
     let mx=(keys['a']?1:0)-(keys['d']?1:0), mz=(keys['w']?1:0)-(keys['s']?1:0); const L=Math.hypot(mx,mz); if(L>1){mx/=L;mz/=L;}
     kpos.x += mx*KING.moveSpeed*dt; kpos.z += mz*KING.moveSpeed*dt;
-    kpos.x=clampN(kpos.x, KING.area.minX, KING.area.maxX); kpos.z=clampN(kpos.z, KING.area.minZ, KING.area.maxZ);
+    const sallying = lastSnap.gate && (lastSnap.gate.open || lastSnap.gate.hp<=0); const fwdZ = sallying ? KING.sallyZ : KING.area.maxZ;
+    kpos.x=clampN(kpos.x, KING.area.minX, KING.area.maxX); kpos.z=clampN(kpos.z, KING.area.minZ, fwdZ);
     const dx=sk.x-kpos.x, dz=sk.z-kpos.z; if(dx*dx+dz*dz>36){kpos.x=sk.x;kpos.z=sk.z;} else {kpos.x+=dx*0.08;kpos.z+=dz*0.08;}  // reconcile (e.g. ram knockback)
     world.setKingPos(kpos.x, kpos.z, Math.atan2(aim.x-kpos.x, aim.z-kpos.z));
   }
@@ -146,7 +147,8 @@ function fmt(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60)
 function updateHud(m){
   $('#gateFill').style.width=(m.gate.maxHp?m.gate.hp/m.gate.maxHp*100:0)+'%';
   $('#hpFill').style.width=(m.king.maxHp?m.king.hp/m.king.maxHp*100:0)+'%';
-  $('#gateLabel').textContent = m.gate.hp>0 ? 'CASTLE GATE (holds them back)' : 'GATE BREACHED - protect the King!';
+  $('#gateLabel').textContent = m.gate.open ? 'GATE OPEN — Jeremy is exposed! (F to retreat)' : (m.gate.hp>0 ? 'CASTLE GATE (holds them back)' : 'GATE BREACHED - protect the King!');
+  $('#gateBtn').textContent = m.gate.open ? 'RETREAT' : (m.gate.hp>0 ? 'OPEN GATE' : 'GATE DOWN'); $('#gateBtn').disabled = (!m.gate.open && m.gate.hp<=0);
   $('#gold').textContent=(m.gold||0)+' gold';
   const ram = m.ram ? 'RAM ROLLING IN!' : `Ram: wood ${m.wood||0}/${m.woodNeeded||0}, iron ${m.iron||0}/${m.ironNeeded||0}`;
   const up = m.king.up||{}; const ups=[ ['Might',up.might],['Swift',up.swift],['Reach',up.reach] ].filter(u=>u[1]>0).map(u=>u[0]+' '+u[1]).join(', ');

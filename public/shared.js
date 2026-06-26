@@ -35,6 +35,8 @@ export const KING = {
   shieldPerGuard: 0.06,  // 6% reduction per guard...
   shieldMax: 0.85,       // ...up to 85% damage reduction
   moveSpeed: 15,         // King strolls at this speed (units/sec)
+  sallyZ: 36,            // when he OPENS the gate he can charge forward down the lane to this z
+  regenFrac: 0.012,      // HP regen/sec while shielded behind the CLOSED gate
   // The courtyard the King may roam (he cannot enter the lane):
   area: { minX: -26, maxX: 26, minZ: LANE.kingZ - 22, maxZ: LANE.kingZ + 22 }, // stays on the hilltop mesa
   attacks: {
@@ -72,10 +74,10 @@ export const ARCHER = { frac: 0.3, range: 20, dmg: 8, cd: 1700, projSpeed: 40 };
 // crowd pushes to the gate, which SHATTERS the King's shield for a burst window.
 // Side rooms hang off the lane beside the BACK CAMP: within this z-window the walkable area bulges out past the walls.
 export const POCKET = { zMin: 78, zMax: 150, outerX: 48 };
-export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 112, count: 14, regrowMs: 10000 }; // LEFT of camp -> WOOD
+export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 142, count: 16, regrowMs: 10000 }; // LEFT of camp -> WOOD
 export const TREE = { hp: 60, radius: 1.2 };
 export const CHOP = { radius: 3.6, dmg: 20, woodPerTree: 1 };   // FIRE near a tree chops it
-export const IRON = { xMin: 32, xMax: 46, zMin: 82, zMax: 112, count: 12, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 10000 }; // RIGHT of camp -> IRON
+export const IRON = { xMin: 30, xMax: 47, zMin: 82, zMax: 142, count: 17, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 10000 }; // RIGHT of camp -> IRON
 export const MINE_DMG = 20;
 export const RAM = {
   woodNeededBase: 8, woodNeededPerPlayer: 0.5, woodNeededMax: 36,
