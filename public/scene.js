@@ -168,12 +168,15 @@ export function createWorld(canvas, opts = {}) {
     g = new THREE.Group();
     if (kind === 'trebuchet') {
       const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a3f24, roughness: 0.9, transparent: true, opacity: 1 });
-      const base = new THREE.Mesh(new THREE.BoxGeometry(4, 0.7, 5), woodMat); base.position.y = 0.35; g.add(base);
-      for (const sx of [-1.5, 1.5]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, 6.4, 6), woodMat); leg.position.set(sx, 3.2, 0); leg.rotation.z = sx > 0 ? 0.34 : -0.34; g.add(leg); }
-      const apex = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4.4), woodMat); apex.position.y = 6; g.add(apex);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 7.6), woodMat); arm.position.set(0, 5.6, -1.4); arm.rotation.x = -0.85; g.add(arm);
-      const cw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), woodMat); cw.position.set(0, 3.8, 2.1); g.add(cw);
-      const glow = new THREE.Sprite(glowMaterial(0xffd23f)); glow.scale.set(7, 7, 1); glow.position.y = 6.6; g.add(glow);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.7, 5.4), woodMat); base.position.y = 0.55; g.add(base);
+      for (const sx of [-1.7, 1.7]) for (const sz of [-2, 2]) { const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.3, 12), woodMat); wheel.rotation.z = Math.PI / 2; wheel.position.set(sx, 0.7, sz); g.add(wheel); }
+      for (const sx of [-1.5, 1.5]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 6.6, 8), woodMat); leg.position.set(sx, 3.6, 0); leg.rotation.z = sx > 0 ? 0.32 : -0.32; g.add(leg); }
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 0.3), woodMat); brace.position.set(0, 2.6, 0); g.add(brace);
+      const apex = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 4.6), woodMat); apex.position.y = 6.5; g.add(apex);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 8.2), woodMat); arm.position.set(0, 6.0, -1.6); arm.rotation.x = -0.8; g.add(arm);
+      const sling = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), woodMat); sling.position.set(0, 8.4, -4.6); g.add(sling);
+      const cw = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 0), new THREE.MeshStandardMaterial({ color: 0x5a5560, roughness: 1, flatShading: true })); cw.position.set(0, 3.9, 2.4); g.add(cw);
+      const glow = new THREE.Sprite(glowMaterial(0xffd23f)); glow.scale.set(7, 7, 1); glow.position.y = 6.8; g.add(glow);
       g.userData = { tentMat: woodMat };
       scene.add(g); buildMeshes.set(id, g); return g;
     }
@@ -272,9 +275,13 @@ export function createWorld(canvas, opts = {}) {
   for (const sz of [-1.95, 1.95]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 0.3), stoneMat); rail.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2 + 0.45, sz); rail.rotation.z = _th; cannonGroup.add(rail); }
   // pivoting barrel assembly on top
   const barrelPivot = new THREE.Group(); barrelPivot.position.y = CANNON.platformY + 1.2; cannonGroup.add(barrelPivot);
-  const carriage = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 3.2), new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.8 })); carriage.position.y = -0.3; barrelPivot.add(carriage);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.95, 5.2, 14), new THREE.MeshStandardMaterial({ color: 0x2f3038, metalness: 0.65, roughness: 0.4 })); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.5, -2); barrelPivot.add(barrel);
-  for (const sx of [-1.5, 1.5]) { const cog = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0x8a7a3a, metalness: 0.6 })); cog.rotation.z = Math.PI / 2; cog.position.set(sx, 0.2, 1.2); barrelPivot.add(cog); }
+  const carriage = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.5, 3.6), new THREE.MeshStandardMaterial({ color: 0x3a2e22, roughness: 0.8, metalness: 0.2 })); carriage.position.y = -0.45; barrelPivot.add(carriage);
+  const mortarMat = new THREE.MeshStandardMaterial({ color: 0x33363f, metalness: 0.72, roughness: 0.34 });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.5, 4.4, 20), mortarMat); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.7, -1.6); barrelPivot.add(barrel);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(1.34, 1.18, 0.7, 20), new THREE.MeshStandardMaterial({ color: 0x202229, metalness: 0.7, roughness: 0.42 })); muzzle.rotation.x = Math.PI / 2; muzzle.position.set(0, 0.7, -3.7); barrelPivot.add(muzzle);
+  const breechBall = new THREE.Mesh(new THREE.SphereGeometry(1.42, 16, 12), mortarMat); breechBall.position.set(0, 0.7, 0.8); barrelPivot.add(breechBall);
+  for (const bz of [-0.6, -2.0, -3.1]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(1.36, 1.36, 0.32, 20), new THREE.MeshStandardMaterial({ color: 0x6a5a2a, metalness: 0.7, roughness: 0.34 })); band.rotation.x = Math.PI / 2; band.position.set(0, 0.7, bz); barrelPivot.add(band); }
+  for (const sx of [-1.7, 1.7]) { const cog = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.16, 8, 16), new THREE.MeshStandardMaterial({ color: 0x8a7a3a, metalness: 0.6, roughness: 0.4 })); cog.position.set(sx, 0.2, 1.4); barrelPivot.add(cog); const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.3, 6), new THREE.MeshStandardMaterial({ color: 0x5a4a2a, metalness: 0.6 })); spoke.position.set(sx, 0.2, 1.4); barrelPivot.add(spoke); }
   const cannonGlow = new THREE.Sprite(glowMaterial(0xffaa44)); cannonGlow.scale.set(8, 8, 1); cannonGlow.position.y = CANNON.platformY + 2.5; cannonGroup.add(cannonGlow);
   const cannonMarker = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.6, 22), new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); cannonMarker.rotation.x = -Math.PI / 2; cannonMarker.position.y = 0.12; cannonMarker.visible = false; scene.add(cannonMarker);
   let cannonT = null;
@@ -469,7 +476,7 @@ export function createWorld(canvas, opts = {}) {
       barrelPivot.visible = !!built;
       if (built) {
         barrelPivot.rotation.y += (cannonT.aim - barrelPivot.rotation.y) * k;
-        const pitch = -0.5 + ((cannonT.range - CANNON.rangeMin) / (CANNON.rangeMax - CANNON.rangeMin)) * 0.45;  // longer range -> flatter
+        const pitch = -1.15 + ((cannonT.range - CANNON.rangeMin) / (CANNON.rangeMax - CANNON.rangeMin)) * 0.5;  // MORTAR: steep up; longer range -> a touch flatter
         barrelPivot.rotation.x += (pitch - barrelPivot.rotation.x) * k;
         const tx = CANNON.x + Math.sin(cannonT.aim) * cannonT.range, tz = CANNON.z - Math.cos(cannonT.aim) * cannonT.range;
         cannonMarker.position.set(Math.max(-LANE.halfWidth, Math.min(LANE.halfWidth, tx)), 0.12, Math.max(LANE.minZ, tz)); cannonMarker.visible = true;

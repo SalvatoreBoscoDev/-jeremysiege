@@ -73,8 +73,8 @@ const d2 = (ax, az, bx, bz) => (ax - bx) ** 2 + (az - bz) ** 2;
 function fireCannon(id) {
   const tx = clamp(CANNON.x + Math.sin(cannon.aim) * cannon.range, -LANE.halfWidth, LANE.halfWidth);
   const tz = clamp(CANNON.z - Math.cos(cannon.aim) * cannon.range, LANE.minZ, LANE.maxZ);
-  const T = 1.2;
-  projectiles.push({ id: projId++, owner: id, wep: 'rocket', x: CANNON.x, y: CANNON.platformY + 2, z: CANNON.z, vx: (tx - CANNON.x) / T, vz: (tz - CANNON.z) / T, vy: 0.5 * 22 * T, arc: true, born: now(), splash: CANNON.shellSplash, dmg: CANNON.shellDmg, antiUnit: 1 });
+  const T = 2.2, g = 22, y0 = CANNON.platformY + 2;   // long high MORTAR lob; vy tuned so the shell LANDS exactly on the target (where the marker shows)
+  projectiles.push({ id: projId++, owner: id, wep: 'rocket', x: CANNON.x, y: y0, z: CANNON.z, vx: (tx - CANNON.x) / T, vz: (tz - CANNON.z) / T, vy: 0.5 * g * T - y0 / T, arc: true, born: now(), splash: CANNON.shellSplash, dmg: CANNON.shellDmg, antiUnit: 1, landOnly: 1 });
   fxQueue.push({ k: 'muzzle', x: CANNON.x, z: CANNON.z, c: 0xffaa44 });
 }
 function aoeTroopsAt(x, z, radius, dmg, ownerId) { for (const tr of troops.values()) if (Math.hypot(tr.x - x, tr.z - z) <= radius + TROOP.radius) damageTroop(tr, dmg, ownerId); }
@@ -463,7 +463,7 @@ setInterval(() => {
     } else if (pr.gateOnly) {
       if (up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
     } else {
-      let hitT = null, hb = Infinity; for (const tr of troops.values()) { const d = (tr.x - pr.x) ** 2 + (tr.z - pr.z) ** 2; if (d < hb) { hb = d; hitT = tr; } }
+      let hitT = null, hb = Infinity; if (!pr.landOnly || pr.y < 2.5) for (const tr of troops.values()) { const d = (tr.x - pr.x) ** 2 + (tr.z - pr.z) ** 2; if (d < hb) { hb = d; hitT = tr; } }
       if (hitT && Math.sqrt(hb) <= TROOP.radius + 0.6) { damageTroop(hitT, pr.dmg, pr.owner); done = true; }
       if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
       if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
