@@ -268,7 +268,7 @@ export function createWorld(canvas, opts = {}) {
   const platTop = new THREE.Mesh(new THREE.CylinderGeometry(CANNON.platformR - 0.3, CANNON.platformR - 0.3, 0.3, 24), new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 1 })); platTop.position.y = CANNON.platformY + 0.15; cannonGroup.add(platTop);
   // one simple straight ramp up the camp-facing (-x) side
   const _run = 6.5, _rise = CANNON.platformY, _sl = Math.hypot(_run, _rise), _th = Math.atan2(_rise, _run);
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 3.8), new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 1 })); ramp.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2, 0); ramp.rotation.z = _th; ramp.receiveShadow = realShadows; cannonGroup.add(ramp);
+  const cannonRamp = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 3.8), new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 1 })); cannonRamp.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2, 0); cannonRamp.rotation.z = _th; cannonRamp.receiveShadow = realShadows; cannonGroup.add(cannonRamp);
   for (const sz of [-1.95, 1.95]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 0.3), stoneMat); rail.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2 + 0.45, sz); rail.rotation.z = _th; cannonGroup.add(rail); }
   // pivoting barrel assembly on top
   const barrelPivot = new THREE.Group(); barrelPivot.position.y = CANNON.platformY + 1.2; cannonGroup.add(barrelPivot);
