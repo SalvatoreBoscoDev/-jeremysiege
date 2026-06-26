@@ -9,22 +9,23 @@
   html,body { height:100%; overflow:hidden; background:#070910; font-family:system-ui,sans-serif; color:#fff; }
   #c { position:fixed; inset:0; width:100%; height:100%; }
   #hud { position:fixed; inset:0; pointer-events:none; }
-  #title { position:absolute; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
-  #title h1 { font-size:34px; font-weight:900; letter-spacing:2px; background:linear-gradient(90deg,#ffd23f,#ff5e3a); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 2px 12px #0006; }
-  #hpwrap { position:absolute; top:78px; left:50%; transform:translateX(-50%); width:min(900px,70vw); }
-  .bar { height:30px; border-radius:15px; background:rgba(0,0,0,.55); border:3px solid #fff3; overflow:hidden; }
-  #hpfill { height:100%; background:linear-gradient(90deg,#ff2a4d,#ff7a2a); transition:width .15s; }
-  #hptext { text-align:center; font-weight:800; font-size:18px; margin-top:6px; text-shadow:0 1px 4px #000; }
-  #qrcard { position:absolute; right:26px; bottom:26px; background:rgba(255,255,255,.96); color:#1a1030; border-radius:18px; padding:18px; text-align:center; box-shadow:0 12px 40px #000a; }
-  #qrcard #qr { width:200px; height:200px; image-rendering:pixelated; }
-  #qrcard .j { font-weight:900; font-size:16px; margin-bottom:8px; color:#5a2b8a; }
-  #qrcard .u { font-weight:800; font-size:18px; margin-top:8px; color:#1a1030; }
-  #qrcard .h { font-size:12px; opacity:.7; margin-top:2px; }
-  #count { position:absolute; left:26px; bottom:26px; background:rgba(0,0,0,.5); border-radius:14px; padding:14px 20px; font-size:20px; font-weight:900; line-height:1.5; }
-  #feed { position:absolute; left:26px; top:150px; width:280px; font-size:16px; }
-  #feed div { background:rgba(0,0,0,.4); padding:5px 10px; border-radius:8px; margin-bottom:5px; }
-  #big { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:radial-gradient(circle at 50% 40%,#1d3a1dcc,#0a0e0aee); z-index:5; }
-  #big h1 { font-size:72px; color:#aaff66; text-shadow:0 3px 16px #000; } #big p { font-size:26px; }
+  #title { position:absolute; top:20px; left:50%; transform:translateX(-50%); text-align:center; }
+  #title h1 { font-size:38px; font-weight:900; letter-spacing:4px; background:linear-gradient(95deg,#ffe07a,#ffd23f 35%,#ff5e3a); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 2px 14px #0008; filter:drop-shadow(0 2px 10px #ffb13344); }
+  #hpwrap { position:absolute; top:84px; left:50%; transform:translateX(-50%); width:min(900px,70vw); }
+  .bar { height:32px; border-radius:16px; background:rgba(0,0,0,.6); border:3px solid #ffffff33; overflow:hidden; box-shadow:0 6px 22px #0007, inset 0 1px 3px #0008; }
+  #hpfill { height:100%; background:linear-gradient(90deg,#ff2a4d,#ff7a2a); transition:width .15s; box-shadow:inset 0 1px 0 #ffffff44; }
+  #hptext { text-align:center; font-weight:800; font-size:18px; letter-spacing:.5px; margin-top:8px; text-shadow:0 1px 5px #000; }
+  #qrcard { position:absolute; right:26px; bottom:26px; background:linear-gradient(180deg,#ffffff,#f3eefb); color:#1a1030; border-radius:20px; padding:20px; text-align:center; box-shadow:0 16px 48px #000b, 0 0 0 1px #ffffff22, 0 0 28px #ffd23f33; }
+  #qrcard #qr { width:200px; height:200px; image-rendering:pixelated; border-radius:8px; border:4px solid #5a2b8a18; }
+  #qrcard .j { font-weight:900; font-size:15px; letter-spacing:2px; margin-bottom:10px; color:#5a2b8a; }
+  #qrcard .u { font-weight:800; font-size:18px; margin-top:10px; color:#1a1030; }
+  #qrcard .h { font-size:12px; opacity:.65; margin-top:3px; }
+  #count { position:absolute; left:26px; bottom:26px; background:linear-gradient(180deg,#ffffff10,#00000080); border:1px solid #ffffff1f; border-radius:16px; padding:15px 22px; font-size:20px; font-weight:900; line-height:1.55; box-shadow:0 10px 30px #0007; text-shadow:0 1px 3px #000; }
+  #feed { position:absolute; left:26px; top:154px; width:288px; font-size:16px; }
+  #feed div { background:linear-gradient(90deg,#000000a0,#00000055); border-left:3px solid #ffd23f99; padding:6px 12px; border-radius:8px; margin-bottom:6px; font-weight:600; text-shadow:0 1px 3px #000; animation:feedin .25s ease-out; }
+  @keyframes feedin { from{opacity:0; transform:translateX(-10px)} to{opacity:1; transform:none} }
+  #big { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:radial-gradient(circle at 50% 40%,#1d3a1dcc,#0a0e0aee); z-index:5; }
+  #big h1 { font-size:76px; font-weight:900; letter-spacing:2px; color:#aaff66; text-shadow:0 3px 20px #000; } #big p { font-size:26px; opacity:.92; text-shadow:0 2px 8px #000; }
 </style>
 </head>
 <body>
