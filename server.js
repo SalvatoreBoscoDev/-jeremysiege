@@ -115,9 +115,16 @@ function handleMessage(id, ws, m) {
       break;
     }
     case 'in': { const p = players.get(id); if (!p) return; p.mx = clamp(+m.mx || 0, -1, 1); p.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') p.a = m.a; break; }
+    // Client-authoritative position: the client simulates its own movement and reports it.
+    // We trust x/z but still clamp to the lane and in front of a standing gate so nobody
+    // can walk through walls / into the castle and break the game (integrity, not anti-cheat).
+    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
     case 'fire': playerFire(id); break;
     case 'kmove': { if (clients.get(id)?.role !== 'king') return; king.mx = clamp(+m.mx || 0, -1, 1); king.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') king.a = m.a; break; }
     case 'wmove': { if (clients.get(id)?.role !== 'wizard' || !wizard) return; wizard.mx = clamp(+m.mx || 0, -1, 1); wizard.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') wizard.a = m.a; break; }
+    // Client-authoritative King / Wizard position (same approach as players), clamped to their roam area.
+    case 'kpos': { if (clients.get(id)?.role !== 'king') return; const nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; king.x = clamp(nx, KING.area.minX, KING.area.maxX); king.z = clamp(nz, KING.area.minZ, KING.area.maxZ); if (typeof m.a === 'number') king.a = m.a; break; }
+    case 'wpos': { if (clients.get(id)?.role !== 'wizard' || !wizard) return; const nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; wizard.x = clamp(nx, WIZARD.area.minX, WIZARD.area.maxX); wizard.z = clamp(nz, WIZARD.area.minZ, WIZARD.area.maxZ); if (typeof m.a === 'number') wizard.a = m.a; break; }
     case 'katk': kingAttack(id, m.kind, +m.x, +m.z); break;
     case 'spell': wizardSpell(id, m.kind, +m.x, +m.z); break;
     case 'perk': { const p = players.get(id); if (p && phase === 'intermission' && PERKS[m.perk] && p.perkRound !== round) { p.perks[m.perk] = (p.perks[m.perk] || 0) + 1; p.perkRound = round; p.hp = effMaxHp(p); send(ws, { t: 'ev', kind: 'perkok', perk: m.perk }); } break; }
@@ -251,19 +258,17 @@ setInterval(() => {
   if (combat && t >= phaseEndsAt && king.alive) endRoundToIntermission();
   else if (phase === 'intermission' && t >= phaseEndsAt) startRound(round + 1);
 
-  if (king.alive && (king.mx || king.mz)) { king.x = clamp(king.x + king.mx * KING.moveSpeed * dt, KING.area.minX, KING.area.maxX); king.z = clamp(king.z + king.mz * KING.moveSpeed * dt, KING.area.minZ, KING.area.maxZ); }
-  if (wizard && (wizard.mx || wizard.mz)) { wizard.x = clamp(wizard.x + wizard.mx * WIZARD.moveSpeed * dt, WIZARD.area.minX, WIZARD.area.maxX); wizard.z = clamp(wizard.z + wizard.mz * WIZARD.moveSpeed * dt, WIZARD.area.minZ, WIZARD.area.maxZ); }
+  // King / Wizard positions are now CLIENT-AUTHORITATIVE (see 'kpos' / 'wpos' handlers); no server integration.
   for (const tr of trees.values()) if (!tr.alive && t >= tr.regrowAt) { tr.alive = true; tr.hp = TREE.hp; }
   for (const o of irons.values()) if (!o.alive && t >= o.regrowAt) { o.alive = true; o.hp = IRON.hp; }
   if (combat && t - lastWaveAt > WAVE.intervalMs) { lastWaveAt = t; spawnWave(waveSize()); }
 
   const up = gateUp();
+  // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer
+  // integrates mx/mz for players; it only handles respawn and re-clamps if the gate just dropped.
   for (const p of players.values()) {
     if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; } continue; }
-    const spd = PLAYER.speed * speedMult(p) * (t < p.slowUntil ? 0.4 : 1);
-    let nx = p.x + p.mx * spd * dt, nz = p.z + p.mz * spd * dt; [nx, nz] = clampToLane(nx, nz);
-    if (up && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5;   // stop attackers in FRONT of the gate (no hiding inside)
-    p.x = nx; p.z = nz;
+    if (up && p.z < LANE.wallZ + 3.5) p.z = LANE.wallZ + 3.5;   // keep attackers in FRONT of a standing gate
   }
 
   if (combat) for (const tr of troops.values()) {

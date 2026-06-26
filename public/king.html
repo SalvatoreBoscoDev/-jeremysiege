@@ -81,7 +81,7 @@
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
-import { HILL, LANE } from './shared.js';
+import { HILL, LANE, KING } from './shared.js';
 const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
 const THREE=world.THREE;
@@ -90,6 +90,7 @@ let camX=0, camZ=LANE.kingZ-16; // smoothed chase position
 camera.position.set(0, HILL.height+42, LANE.kingZ-16); camera.lookAt(0, HILL.height-2, LANE.kingZ+55);
 
 let cfg=null, shopCfg=null, lastSnap=null, lastGold=0; const lastCast={cannon:0,slam:0,sweep:0,summon:0};
+let kpos=null; const clampN=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;   // client-authoritative King position
 const reticle=new THREE.Mesh(new THREE.RingGeometry(2.2,3,24), new THREE.MeshBasicMaterial({color:0xff3344,side:THREE.DoubleSide}));
 reticle.rotation.x=-Math.PI/2; reticle.position.y=0.4; world.scene.add(reticle);
 
@@ -103,7 +104,7 @@ const net=connect({
     else if(ev.kind==='round') addFeed('Round '+ev.round+' begins'); else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='ramhit') addFeed('Ram hit the gate!');
   },
 });
-$('#enter').onclick=()=>{ net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); $('#overlay').style.display='none'; startLoop(); };
+$('#enter').onclick=()=>{ net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); world.setLocalKing(); $('#overlay').style.display='none'; startLoop(); };
 $('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'});
 
 function buildShop(){ const wrap=$('#shopItems'); wrap.innerHTML=''; if(!shopCfg) return;
@@ -119,12 +120,22 @@ addEventListener('contextmenu', e=>e.preventDefault());
 const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); keys[k]=true; });
 addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 function cast(kind){ if(!cfg||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[kind]<cfg.attacks[kind].cd) return; lastCast[kind]=now; net.send({t:'katk',kind,x:aim.x,z:aim.z}); }
-setInterval(()=>{ if(!net.ready) return; let mx=(keys['a']?1:0)-(keys['d']?1:0), mz=(keys['w']?1:0)-(keys['s']?1:0); const L=Math.hypot(mx,mz)||1; mx/=L; mz/=L; if(L<0.001){mx=0;mz=0;} let a=0; if(lastSnap&&lastSnap.king){ a=Math.atan2(aim.x-lastSnap.king.x, aim.z-lastSnap.king.z); } net.send({t:'kmove',mx,mz,a}); }, 40);
+setInterval(()=>{ if(!net.ready||!kpos) return; const a=Math.atan2(aim.x-kpos.x, aim.z-kpos.z); net.send({t:'kpos', x:+kpos.x.toFixed(2), z:+kpos.z.toFixed(2), a}); }, 40);
 
 let running=false,lastT=performance.now();
 function startLoop(){ if(running)return; running=true; requestAnimationFrame(loop); }
 function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
-  const kx=lastSnap&&lastSnap.king?lastSnap.king.x:0; const kz=lastSnap&&lastSnap.king?lastSnap.king.z:LANE.kingZ;
+  const sk=lastSnap&&lastSnap.king;
+  if(sk){
+    if(!kpos) kpos={x:sk.x, z:sk.z};
+    // CLIENT-AUTHORITATIVE King movement: simulate locally for instant response.
+    let mx=(keys['a']?1:0)-(keys['d']?1:0), mz=(keys['w']?1:0)-(keys['s']?1:0); const L=Math.hypot(mx,mz); if(L>1){mx/=L;mz/=L;}
+    kpos.x += mx*KING.moveSpeed*dt; kpos.z += mz*KING.moveSpeed*dt;
+    kpos.x=clampN(kpos.x, KING.area.minX, KING.area.maxX); kpos.z=clampN(kpos.z, KING.area.minZ, KING.area.maxZ);
+    const dx=sk.x-kpos.x, dz=sk.z-kpos.z; if(dx*dx+dz*dz>36){kpos.x=sk.x;kpos.z=sk.z;} else {kpos.x+=dx*0.08;kpos.z+=dz*0.08;}  // reconcile (e.g. ram knockback)
+    world.setKingPos(kpos.x, kpos.z, Math.atan2(aim.x-kpos.x, aim.z-kpos.z));
+  }
+  const kx=kpos?kpos.x:0; const kz=kpos?kpos.z:LANE.kingZ;
   camX += (kx*0.5 - camX)*0.07; camZ += ((kz-16) - camZ)*0.07;
   camera.position.set(camX + Math.sin(now/7000)*1.5, HILL.height+42, camZ);
   camera.lookAt(kx*0.35, HILL.height-2, kz+55); world.render(camera);

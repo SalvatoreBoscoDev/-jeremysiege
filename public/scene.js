@@ -257,6 +257,8 @@ export function createWorld(canvas, opts = {}) {
   // ---- dynamic pools ----
   const playerMeshes = new Map(); const projMeshes = new Map(); const fxList = [];
   let roster = new Map();
+  let localId = null;   // the local player's id; its mesh is driven by client prediction, not server snapshots
+  let localKing = false, localWizard = false;   // when this client controls the King/Wizard, drive it from prediction
   let kingT = { x: 0, z: LANE.kingZ, a: 0, vuln: 1, alive: 1 };
   let wizT = { x: -14, z: LANE.kingZ, a: 0, has: 0 };
 
@@ -322,14 +324,16 @@ export function createWorld(canvas, opts = {}) {
   };
 
   function applySnapshot(s) {
-    kingT.x = s.king.x; kingT.z = s.king.z; kingT.a = s.king.a; kingT.vuln = s.king.vulnerable; kingT.alive = s.king.alive;
-    if (s.wizard && typeof s.wizard.x === 'number') { wizT.x = s.wizard.x; wizT.z = s.wizard.z; wizT.a = s.wizard.a; wizT.has = 1; }
+    if (!localKing) { kingT.x = s.king.x; kingT.z = s.king.z; kingT.a = s.king.a; } kingT.vuln = s.king.vulnerable; kingT.alive = s.king.alive;
+    if (s.wizard && typeof s.wizard.x === 'number') { if (!localWizard) { wizT.x = s.wizard.x; wizT.z = s.wizard.z; wizT.a = s.wizard.a; } wizT.has = 1; }
     const seen = new Set();
     for (const pp of s.players) {
       const [id, x, z, a, hp, wep, alive, slowed, maxHp] = pp; seen.add(id);
       const rec = ensurePlayer(id);
       if (rec.g.position.lengthSq() === 0) rec.g.position.set(x, 0, z);
-      rec.tx = x; rec.tz = z; rec.ta = a; rec.g.visible = true; rec.dead = !alive;
+      // Local player is positioned by client prediction (setLocalPos); don't let server snapshots yank it.
+      if (id !== localId) { rec.tx = x; rec.tz = z; rec.ta = a; }
+      rec.g.visible = true; rec.dead = !alive;
       rec.body.material.emissive.setHex(slowed ? 0x2244ff : 0x000000); rec.body.material.emissiveIntensity = slowed ? 0.7 : 0;
       if (rec.hpbar) { const frac = maxHp ? Math.max(0, Math.min(1, hp / maxHp)) : 1; if (Math.abs(frac - rec.hpFrac) > 0.01) { rec.hpFrac = frac; rec.hpbar.set(frac); } rec.hpbar.spr.visible = !!alive; }
     }
@@ -552,6 +556,12 @@ export function createWorld(canvas, opts = {}) {
   }
 
   return { THREE, scene, renderer, king, castle, playerMeshes, setRoster, applySnapshot, update, updateFx, resize,
+    setLocalId: (id) => { localId = id; },
+    setLocalPos: (id, x, z, a) => { const rec = ensurePlayer(id); rec.tx = x; rec.tz = z; rec.ta = a; rec.g.position.x = x; rec.g.position.z = z; rec.g.rotation.y = a; },
+    setLocalKing: () => { localKing = true; },
+    setKingPos: (x, z, a) => { kingT.x = x; kingT.z = z; if (typeof a === 'number') kingT.a = a; king.position.x = x; king.position.z = z; },
+    setLocalWizard: () => { localWizard = true; },
+    setWizPos: (x, z, a) => { wizT.x = x; wizT.z = z; if (typeof a === 'number') wizT.a = a; wizT.has = 1; wiz.position.x = x; wiz.position.z = z; },
     getPlayerMesh: (id) => playerMeshes.get(id), getWizPos: () => ({ x: wiz.position.x, z: wiz.position.z }), render: (cam) => renderer.render(scene, cam) };
 }
 
