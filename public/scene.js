@@ -398,6 +398,7 @@ export function createWorld(canvas, opts = {}) {
     grenade: { geo: new THREE.SphereGeometry(0.55, 8, 8), mat: new THREE.MeshStandardMaterial({ color: 0x331a0a, emissive: 0xff5a1a, emissiveIntensity: 1.3 }) },
     cannon:  { geo: new THREE.CylinderGeometry(0.14, 0.14, 1.7, 6), mat: new THREE.MeshStandardMaterial({ color: 0x9aa6b4, metalness: 0.6, roughness: 0.4 }), lie: true },
     rocket:  { geo: new THREE.SphereGeometry(0.95, 8, 8), mat: new THREE.MeshStandardMaterial({ color: 0x8a7866, roughness: 1, flatShading: true }) },
+    enemyarrow: { geo: new THREE.CylinderGeometry(0.12, 0.12, 1.7, 6), mat: new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0x661111, emissiveIntensity: 0.6, roughness: 0.6 }), lie: true },
   };
 
   function applySnapshot(s) {

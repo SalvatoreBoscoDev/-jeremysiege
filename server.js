@@ -10,7 +10,7 @@ import os from 'os';
 import { WebSocketServer } from 'ws';
 import {
   LANE, POCKET, CAMP, TICK_MS, PLAYER, KING, TROOP, WAVE, WIZARD, FOREST, TREE, CHOP, IRON, MINE_DMG, RAM,
-  WEAPONS, WEAPON_ORDER, PLAYER_COLORS, GATE, ROUNDS, GOLD, TOWER, SHOP, KING_UP_MAX, WEAPON_BUY, WEAPON_BUY_ORDER,
+  WEAPONS, WEAPON_ORDER, PLAYER_COLORS, GATE, ROUNDS, GOLD, TOWER, SHOP, KING_UP_MAX, WEAPON_BUY, WEAPON_BUY_ORDER, ARCHER,
   PERKS, PERK_FX, PERK_ORDER, PERK_BUY, PERK_MAX, PACK, BUILDS, FRIENDLY, CANNON, ABILITIES, TUNE, clampToLane,
   COSMETICS, COSMETIC_SLOTS,
 } from './public/shared.js';
@@ -234,6 +234,12 @@ function buy(item) {
   gold -= cfg.cost; broadcast({ t: 'ev', kind: 'bought', item });
 }
 
+// A destructible built structure (trebuchet) takes damage; when it drops it resets to an empty pad to rebuild.
+function damageBuildStruct(b, dmg) {
+  if (!b.built || !b.destructible) return;
+  b.hp -= dmg;
+  if (b.hp <= 0) { b.built = false; b.bw = 0; b.bi = 0; b.hp = b.maxHp; fxQueue.push({ k: 'boom', x: b.x, z: b.z, r: 7, c: 0xff7733 }); broadcast({ t: 'ev', kind: 'builddown', what: b.kind }); }
+}
 // ---------- combat / gathering ----------
 const GATHER_CD = 250;   // fixed ms between chops/mines/dumps — same for EVERY class, independent of weapon fire rate
 function playerFire(id) {
@@ -250,6 +256,12 @@ function playerFire(id) {
   }
   // WEAPON FIRE: combat only, gated by the weapon's own cooldown.
   if (phase !== 'combat') return;
+  // Operate a built trebuchet you're standing at: spend 1 iron to lob a gate-only shot.
+  for (const b of builds.values()) {
+    if (b.kind !== 'trebuchet' || !b.built || Math.hypot(p.x - b.x, p.z - b.z) > b.r + 3) continue;
+    if (p.carry.i > 0 && t - (b.lastFire || 0) >= b.cfg.fireMs) { p.carry.i -= 1; b.lastFire = t; const T = 1.6; projectiles.push({ id: projId++, owner: id, gateOnly: true, wep: 'rocket', x: b.x, y: 7, z: b.z, vx: (0 - b.x) / T, vz: ((LANE.wallZ - 2) - b.z) / T, vy: 0.5 * 22 * T, arc: true, born: t, splash: b.cfg.splash, dmg: b.cfg.dmg }); fxQueue.push({ k: 'muzzle', x: b.x, z: b.z, c: 0xffd23f }); }
+    return;
+  }
   if (t - p.lastShot < w.cd) return; p.lastShot = t;
   const dm = dmgMult(p);
   for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, ox: p.x, oz: p.z, range: w.range || 80, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
@@ -326,7 +338,7 @@ function aoeBuildsFriendlies(x, z, radius, dmg) {
 // ---------- troops ----------
 function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
 function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
-function spawnWave(n) { if (NO_TROOPS) return; const room = maxAlive() - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12, lastAtk: 0 }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
+function spawnWave(n) { if (NO_TROOPS) return; const room = maxAlive() - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
@@ -362,14 +374,34 @@ setInterval(() => {
   }
 
   if (combat) for (const tr of troops.values()) {
-    // target the nearest attacker OR friendly troop (friendlies act as a screen, drawing enemy fire)
-    let tp = null, tf = null, best = Infinity;
-    for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tr.x) ** 2 + (p.z - tr.z) ** 2; if (d < best) { best = d; tp = p; tf = null; } }
-    for (const f of friendlies.values()) { const d = (f.x - tr.x) ** 2 + (f.z - tr.z) ** 2; if (d < best) { best = d; tf = f; tp = null; } }
-    let tx, tz; if (tp) { tx = tp.x; tz = tp.z; } else if (tf) { tx = tf.x; tz = tf.z; } else { tx = tr.x; tz = LANE.playerSpawnZ; }
+    // nearest live attacker (archers shoot this; also a melee candidate)
+    let tp = null, pbest = Infinity;
+    for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tr.x) ** 2 + (p.z - tr.z) ** 2; if (d < pbest) { pbest = d; tp = p; } }
+    if (tr.kind === 'archer') {
+      // ARCHER: hang back and loose arrows at the nearest attacker; advance only to stay in range.
+      const dx = tp ? tp.x - tr.x : 0, dz = tp ? tp.z - tr.z : -1, d = Math.hypot(dx, dz) || 1;
+      if (tp && d > ARCHER.range) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
+      else if (tp && t - tr.lastAtk > ARCHER.cd) { tr.lastAtk = t; const aa = Math.atan2(tp.x - tr.x, tp.z - tr.z); projectiles.push({ id: projId++, owner: -2, foe: true, wep: 'enemyarrow', x: tr.x, y: 2, z: tr.z, ox: tr.x, oz: tr.z, range: ARCHER.range + 10, vx: Math.sin(aa) * ARCHER.projSpeed, vz: Math.cos(aa) * ARCHER.projSpeed, vy: 0, arc: false, born: t, splash: 0, dmg: ARCHER.dmg * tune.troopDmg }); fxQueue.push({ k: 'troophit', x: tr.x, z: tr.z }); }
+      continue;
+    }
+    // MELEE: charge the nearest of player / friendly / destructible build (trebuchet) and smash it.
+    let tgt = tp, ttype = tp ? 'player' : null, best = pbest;
+    for (const f of friendlies.values()) { const d = (f.x - tr.x) ** 2 + (f.z - tr.z) ** 2; if (d < best) { best = d; tgt = f; ttype = 'friendly'; } }
+    for (const b of builds.values()) { if (!b.built || !b.destructible) continue; const d = (b.x - tr.x) ** 2 + (b.z - tr.z) ** 2; if (d < best) { best = d; tgt = b; ttype = 'build'; } }
+    const tx = tgt ? tgt.x : tr.x, tz = tgt ? tgt.z : LANE.playerSpawnZ;
     const dx = tx - tr.x, dz = tz - tr.z, d = Math.hypot(dx, dz) || 1;
-    if (d > TROOP.attackRange) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
-    else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t; if (tp) { damagePlayer(tp, TROOP.dmg * tune.troopDmg); fxQueue.push({ k: 'troophit', x: tp.x, z: tp.z }); } else if (tf) { tf.hp -= TROOP.dmg; if (tf.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tf.x, z: tf.z }); friendlies.delete(tf.id); } } }
+    const reach = ttype === 'build' ? (tgt.r + TROOP.attackRange) : TROOP.attackRange;
+    if (d > reach) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
+    else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t;
+      if (ttype === 'player') { damagePlayer(tgt, TROOP.dmg * tune.troopDmg); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
+      else if (ttype === 'friendly') { tgt.hp -= TROOP.dmg; if (tgt.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tgt.x, z: tgt.z }); friendlies.delete(tgt.id); } }
+      else if (ttype === 'build') { damageBuildStruct(tgt, TROOP.dmg); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
+    }
+  }
+  // Keep troops from piling onto one tile (a stack reads as a single super-unit that hits all at once).
+  if (combat && troops.size > 1) { const TSEP = 1.7, arr = [...troops.values()];
+    for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) { const A = arr[a], B = arr[b], sdx = B.x - A.x, sdz = B.z - A.z, sd = sdx * sdx + sdz * sdz; if (sd < TSEP * TSEP && sd > 0.0004) { const dist = Math.sqrt(sd), push = (TSEP - dist) * 0.5, ux = sdx / dist, uz = sdz / dist; A.x -= ux * push; A.z -= uz * push; B.x += ux * push; B.z += uz * push; } }
+    for (const tr of arr) { const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
   }
 
   // Friendly troops (from a built troop camp): fight nearby enemies, else march to the gate and chip it.
@@ -385,7 +417,7 @@ setInterval(() => {
     if (!b.built) continue;
     if (b.kind === 'hospital') { for (const p of players.values()) { if (!p.alive) continue; if (Math.hypot(p.x - b.x, p.z - b.z) <= b.cfg.healR) { const mh = effMaxHp(p); if (p.hp < mh) p.hp = Math.min(mh, p.hp + b.cfg.healPerSec * dt); } } }
     else if (b.kind === 'troopcamp') { if (friendlies.size < b.cfg.capAlive && t - b.lastSpawn > b.cfg.spawnMs) { b.lastSpawn = t; friendlies.set(friendlyId, { id: friendlyId, x: b.x + (Math.random() - 0.5) * 4, z: b.z, hp: FRIENDLY.hp, lastAtk: 0 }); friendlyId++; } }
-    else if (b.kind === 'trebuchet') { if (t - b.lastSpawn > b.cfg.fireMs) { b.lastSpawn = t; const T = 1.6; projectiles.push({ id: projId++, owner: -1, wep: 'rocket', x: b.x, y: 7, z: b.z, vx: (0 - b.x) / T, vz: ((LANE.wallZ - 2) - b.z) / T, vy: 0.5 * 22 * T, arc: true, born: t, splash: b.cfg.splash, dmg: b.cfg.dmg }); fxQueue.push({ k: 'muzzle', x: b.x, z: b.z, c: 0xffd23f }); } }
+    // trebuchet is now PLAYER-fired (stand at it, spend 1 iron) — see playerFire; no auto-fire.
   }
 
   // CANNON cogs: while a station is being cranked (recent input), sweep that axis and bounce at the limits.
@@ -410,17 +442,25 @@ setInterval(() => {
   for (const pr of projectiles) {
     pr.x += pr.vx * dt; pr.z += pr.vz * dt; if (pr.arc) { pr.y += pr.vy * dt; pr.vy -= 22 * dt; }
     let done = false;
-    let hitT = null, hb = Infinity; for (const tr of troops.values()) { const d = (tr.x - pr.x) ** 2 + (tr.z - pr.z) ** 2; if (d < hb) { hb = d; hitT = tr; } }
-    if (hitT && Math.sqrt(hb) <= TROOP.radius + 0.6) { damageTroop(hitT, pr.dmg, pr.owner); done = true; }
-    if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
-    if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
+    if (pr.foe) {
+      // enemy arrow: damage the nearest attacker it touches
+      let hp_ = null, hb2 = Infinity; for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - pr.x) ** 2 + (p.z - pr.z) ** 2; if (d < hb2) { hb2 = d; hp_ = p; } }
+      if (hp_ && Math.sqrt(hb2) <= 1.5) { damagePlayer(hp_, pr.dmg); fxQueue.push({ k: 'troophit', x: hp_.x, z: hp_.z }); done = true; }
+    } else if (pr.gateOnly) {
+      if (up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
+    } else {
+      let hitT = null, hb = Infinity; for (const tr of troops.values()) { const d = (tr.x - pr.x) ** 2 + (tr.z - pr.z) ** 2; if (d < hb) { hb = d; hitT = tr; } }
+      if (hitT && Math.sqrt(hb) <= TROOP.radius + 0.6) { damageTroop(hitT, pr.dmg, pr.owner); done = true; }
+      if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
+      if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
+    }
     if (!done && pr.arc && pr.y <= 0) done = true;
     if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.minZ - 8 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000 || (pr.range && (pr.x - pr.ox) ** 2 + (pr.z - pr.oz) ** 2 >= pr.range * pr.range))) done = true;
     if (done) {
       if (pr.splash > 0) {
-        for (const tr of troops.values()) if (Math.hypot(tr.x - pr.x, tr.z - pr.z) <= pr.splash + TROOP.radius) damageTroop(tr, pr.dmg * 0.6, pr.owner);
+        if (!pr.gateOnly) for (const tr of troops.values()) if (Math.hypot(tr.x - pr.x, tr.z - pr.z) <= pr.splash + TROOP.radius) damageTroop(tr, pr.dmg * 0.6, pr.owner);
         if (!pr.antiUnit && up && pr.z <= LANE.wallZ + pr.splash) damageGate(pr.dmg * 0.5);
-        else if (!pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius + pr.splash) damageKing(pr.dmg * 0.5, pr.owner);
+        else if (!pr.gateOnly && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius + pr.splash) damageKing(pr.dmg * 0.5, pr.owner);
         fxQueue.push({ k: 'boom', x: pr.x, z: pr.z, r: pr.splash, c: WEAPONS[pr.wep].color });
       }
     } else keep.push(pr);

@@ -64,6 +64,8 @@ export const WAVE = {
   maxAlivePerPlayer: 1.3,           // ...plus this per attacker
   maxAliveHardCap: 70,
 };
+// A share of each wave are ARCHERS: they hang back at range and loose arrows instead of charging in.
+export const ARCHER = { frac: 0.3, range: 20, dmg: 8, cd: 1700, projSpeed: 40 };
 
 // ---- Forest economy + battering ram (coordination layer) ----
 // Lumberjacks chop trees in the back for wood; enough wood deploys a ram the
@@ -93,8 +95,8 @@ export const PACK = { cap: 8 };
 export const BUILDS = [
   { id: 'hospital',  kind: 'hospital',  x: -20, z: 113, needW: 10, needI: 0, hp: 380, r: 5, destructible: false, healR: 16, healPerSec: 16 },
   { id: 'troopcamp', kind: 'troopcamp', x:  20, z: 113, needW: 8,  needI: 6, hp: 420, r: 5, destructible: false, spawnMs: 6000, capAlive: 8 },
-  { id: 'trebuchet',  kind: 'trebuchet', x: -22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
-  { id: 'trebuchet2', kind: 'trebuchet', x:  22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
+  { id: 'trebuchet',  kind: 'trebuchet', x: -22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
+  { id: 'trebuchet2', kind: 'trebuchet', x:  22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
 ];
 // Friendly troops sent by a built troop camp: march to the gate, chip it weakly, and soak the King's guards.
 export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2.6, radius: 0.8 };

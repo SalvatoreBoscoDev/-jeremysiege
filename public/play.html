@@ -235,15 +235,9 @@ function updateHud(m){
     for(const o of (m.ironNodes||[])){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} }
     const rs=m.ramSite; if(rs && !rs.built && ((cw||0)>0||(ci||0)>0)){ if((mxp-rs.x)**2+(mzp-rs.z)**2 <= 9*9) nearRam=true; }
     let nearBuild=''; if(!nearTree && !nearIron && !nearRam && ((cw||0)>0||(ci||0)>0)){ for(const b of (m.builds||[])){ if(!b[4]){ const dxx=mxp-b[2], dzz=mzp-b[3]; if(dxx*dxx+dzz*dzz <= 8*8){ nearBuild=b[1]; break; } } } }
-    // cannon crew prompts (on the platform): build, crank a cog, or fire the breech
-    let cannonChip=''; const cn=m.cannon; const sr=(CANNON.stationR+0.6)**2;
-    if(cn && (mxp-cn.x)**2+(mzp-cn.z)**2 <= (CANNON.platformR+2)**2){
-      if(!cn.built){ if((ci||0)>0) cannonChip='DUMP → BUILD CANNON'; }
-      else if((mxp-cn.x)**2+(mzp-(cn.z+CANNON.breechDZ))**2 <= sr){ cannonChip=(ci||0)>0?'FIRE CANNON (1 iron)':'NEED IRON TO FIRE'; }
-      else if((mxp-(cn.x-CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK AIM'; }
-      else if((mxp-(cn.x+CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK RANGE'; }
-    }
-    const cc=$('#chipChop'); if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; } else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP → BUILD RAM'; cc.style.color='#ffcf33'; } else if(nearBuild){ cc.style.display='block'; cc.textContent='DUMP → BUILD '+nearBuild.toUpperCase(); cc.style.color='#ffcf33'; } else if(obj){ cc.style.display='block'; cc.textContent=obj; cc.style.color=objCol; } else cc.style.display='none';
+    // trebuchet prompt: stand at a BUILT treb and spend iron to lob a shot at the gate
+    let trebChip=''; for(const b of (m.builds||[])){ if(b[1]==='trebuchet' && b[4]){ const dxx=mxp-b[2], dzz=mzp-b[3]; if(dxx*dxx+dzz*dzz <= 8*8){ trebChip=(ci||0)>0?'FIRE TREBUCHET (1 iron)':'NEED IRON TO FIRE TREB'; break; } } }
+    const cc=$('#chipChop'); if(trebChip){ cc.style.display='block'; cc.textContent=trebChip; cc.style.color='#ffcf33'; } else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP → BUILD RAM'; cc.style.color='#ffcf33'; } else if(nearBuild){ cc.style.display='block'; cc.textContent='DUMP → BUILD '+nearBuild.toUpperCase(); cc.style.color='#ffcf33'; } else if(obj){ cc.style.display='block'; cc.textContent=obj; cc.style.color=objCol; } else cc.style.display='none';
     const inArmory = (m.phase==='combat'||m.phase==='intermission') && campCfg && ((mxp-campCfg.armory.x)**2+(mzp-campCfg.armory.z)**2 <= (campCfg.armory.r+1)*(campCfg.armory.r+1));
     const ar=$('#armory'); ar.style.display = inArmory?'flex':'none';
     if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
