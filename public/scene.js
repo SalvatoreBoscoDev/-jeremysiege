@@ -277,7 +277,6 @@ export function createWorld(canvas, opts = {}) {
   for (const sx of [-1.5, 1.5]) { const cog = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0x8a7a3a, metalness: 0.6 })); cog.rotation.z = Math.PI / 2; cog.position.set(sx, 0.2, 1.2); barrelPivot.add(cog); }
   const cannonGlow = new THREE.Sprite(glowMaterial(0xffaa44)); cannonGlow.scale.set(8, 8, 1); cannonGlow.position.y = CANNON.platformY + 2.5; cannonGroup.add(cannonGlow);
   const cannonMarker = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.6, 22), new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); cannonMarker.rotation.x = -Math.PI / 2; cannonMarker.position.y = 0.12; cannonMarker.visible = false; scene.add(cannonMarker);
-  cannonGroup.visible = false;   // cannon removed for now (platform/ramp/barrel all hidden)
   let cannonT = null;
 
   // ---- gameplay trees (server-driven forest) ----

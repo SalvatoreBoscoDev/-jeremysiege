@@ -6,11 +6,11 @@
 export const LANE = {
   halfWidth: 26,     // playable x is [-halfWidth, +halfWidth]
   minZ: -54,         // furthest a player can advance (castle wall area)
-  maxZ: 124,         // behind the player spawn line: roomy back camp to mingle
+  maxZ: 158,         // big roomy back camp (rear artillery + room to mingle)
   kingZ: -98,        // King stands here, deep in a roomy rear courtyard behind his wall
   wallZ: -46,        // players blocked from z < wallZ until the gates open
   troopSpawnZ: -44,  // troops spawn here and march toward the players (+z)
-  playerSpawnZ: 100, // attacker spawn line (deep in the camp, behind the stalls)
+  playerSpawnZ: 122, // attacker spawn line (deep in the camp, in front of the rear cannon)
 };
 // Back-compat alias used by a few helpers
 export const ARENA = { castleX: 0, castleZ: LANE.kingZ };
@@ -71,7 +71,7 @@ export const ARCHER = { frac: 0.3, range: 20, dmg: 8, cd: 1700, projSpeed: 40 };
 // Lumberjacks chop trees in the back for wood; enough wood deploys a ram the
 // crowd pushes to the gate, which SHATTERS the King's shield for a burst window.
 // Side rooms hang off the lane beside the BACK CAMP: within this z-window the walkable area bulges out past the walls.
-export const POCKET = { zMin: 78, zMax: 116, outerX: 48 };
+export const POCKET = { zMin: 78, zMax: 150, outerX: 48 };
 export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 112, count: 14, regrowMs: 10000 }; // LEFT of camp -> WOOD
 export const TREE = { hp: 60, radius: 1.2 };
 export const CHOP = { radius: 3.6, dmg: 20, woodPerTree: 1 };   // FIRE near a tree chops it
@@ -95,8 +95,8 @@ export const PACK = { cap: 8 };
 export const BUILDS = [
   { id: 'hospital',  kind: 'hospital',  x: -20, z: 113, needW: 10, needI: 0, hp: 380, r: 5, destructible: false, healR: 16, healPerSec: 16 },
   { id: 'troopcamp', kind: 'troopcamp', x:  20, z: 113, needW: 8,  needI: 6, hp: 420, r: 5, destructible: false, spawnMs: 6000, capAlive: 8 },
-  { id: 'trebuchet',  kind: 'trebuchet', x: -22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
-  { id: 'trebuchet2', kind: 'trebuchet', x:  22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
+  { id: 'trebuchet',  kind: 'trebuchet', x: -16, z: 74, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
+  { id: 'trebuchet2', kind: 'trebuchet', x:  16, z: 74, needW: 10, needI: 8, hp: 460, r: 5, destructible: true, fireMs: 1400, dmg: 45, splash: 6 },
 ];
 // Friendly troops sent by a built troop camp: march to the gate, chip it weakly, and soak the King's guards.
 export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2.6, radius: 0.8 };
@@ -106,10 +106,10 @@ export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2
 //   traverse cog (left) and elevation cog (right) SWEEP the aim while held (bounce); breech (back) consumes 1 iron and fires.
 // DEFENSIVE anti-unit emplacement: sits safely behind the fence (out of Jeremy's reach); its shells kill TROOPS only.
 export const CANNON = {
-  x: 22, z: 64, platformY: 2.6, platformR: 6, r: 5, needI: 14, hp: 600,   // right-flank platform, clear of the camp tents; built by dumping IRON
+  x: 0, z: 146, platformY: 2.6, platformR: 6, r: 5, needI: 14, hp: 600,   // rear-center super-cannon, at the very back of the base; built by dumping IRON
   cogDX: 3.2, breechDZ: 3.6, stationR: 2.4,     // traverse cog at x-cogDX, elevation at x+cogDX, breech at z+breechDZ
   traverseMax: 0.7,                             // aim can swing +/- this many radians off straight-ahead
-  rangeMin: 22, rangeMax: 130,                  // elevation maps to how far down-lane the shell lands
+  rangeMin: 66, rangeMax: 205,                  // from the very back, reaches the field from the camp edge out to the gate
   traverseSpeed: 0.9, rangeSpeed: 70,           // sweep rates while a cog is being cranked
   shellDmg: 80, shellSplash: 9, reload: 850,    // each breech shot (consumes 1 iron from the gunner's pack)
 };
@@ -139,7 +139,7 @@ export const WEAPONS = {
 export const WEAPON_ORDER = ['blaster', 'shotgun', 'grenade', 'cannon', 'rocket'];
 
 // Players' fortified back camp (behind the spawn line). The Armory lets you buy weapons mid-round.
-export const CAMP = { z0: 80, z1: 118, armory: { x: 16, z: 92, r: 7 }, armorer: { x: -16, z: 92, r: 7 }, cosmetics: { x: 0, z: 110, r: 7 } };
+export const CAMP = { z0: 80, z1: 152, armory: { x: 16, z: 92, r: 7 }, armorer: { x: -16, z: 92, r: 7 }, cosmetics: { x: -22, z: 136, r: 7 } };
 // Jeremy stands atop a hill behind the gate; the Wizard fires from a tower beside the castle.
 export const HILL = { z: LANE.kingZ, radius: 40, height: 12 };
 export const WIZ_TOWER = { x: LANE.halfWidth + 18, z: LANE.kingZ + 6, height: 46 };

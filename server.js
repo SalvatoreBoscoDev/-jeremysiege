@@ -266,6 +266,16 @@ function playerFire(id) {
     if (p.carry.i > 0 && t - (b.lastFire || 0) >= b.cfg.fireMs) { p.carry.i -= 1; b.lastFire = t; const T = 1.6; projectiles.push({ id: projId++, owner: id, gateOnly: true, wep: 'rocket', x: b.x, y: 7, z: b.z, vx: (0 - b.x) / T, vz: ((LANE.wallZ - 2) - b.z) / T, vy: 0.5 * 22 * T, arc: true, born: t, splash: b.cfg.splash, dmg: b.cfg.dmg }); fxQueue.push({ k: 'muzzle', x: b.x, z: b.z, c: 0xffd23f }); }
     return;
   }
+  // Crew the rear super-cannon: dump IRON to build it, then crank the cogs (aim L/R, range up/down) and fire the breech at the field.
+  if (Math.hypot(p.x - CANNON.x, p.z - CANNON.z) <= CANNON.platformR + 2) {
+    if (!cannon.built) {
+      if (p.carry.i > 0 && cannon.bi < cannon.needI) { const ti = Math.min(p.carry.i, cannon.needI - cannon.bi); cannon.bi += ti; p.carry.i -= ti; fxQueue.push({ k: 'minegold', x: CANNON.x, z: CANNON.z }); if (cannon.bi >= cannon.needI) { cannon.built = true; cannon.hp = CANNON.hp; broadcast({ t: 'ev', kind: 'built', what: 'cannon' }); } }
+    } else if (Math.hypot(p.x - CANNON.x, p.z - (CANNON.z + CANNON.breechDZ)) <= CANNON.stationR) {
+      if (p.carry.i > 0 && t - cannon.lastFire >= CANNON.reload) { p.carry.i -= 1; cannon.lastFire = t; fireCannon(id); }
+    } else if (Math.hypot(p.x - (CANNON.x - CANNON.cogDX), p.z - CANNON.z) <= CANNON.stationR) { cannon.tUntil = t + 250; }
+    else if (Math.hypot(p.x - (CANNON.x + CANNON.cogDX), p.z - CANNON.z) <= CANNON.stationR) { cannon.eUntil = t + 250; }
+    return;
+  }
   if (t - p.lastShot < w.cd) return; p.lastShot = t;
   const dm = dmgMult(p);
   for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, ox: p.x, oz: p.z, range: w.range || 80, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
@@ -488,7 +498,7 @@ setInterval(() => {
     ramSite: { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1), built: ram.built ? 1 : 0, active: ram.active ? 1 : 0, bw: ram.bw, bi: ram.bi, needW: woodNeeded(), needI: ironNeeded() },
     builds: [...builds.values()].map(b => [b.id, b.kind, b.x, b.z, b.built ? 1 : 0, b.bw, b.bi, b.needW, b.needI, Math.round(b.hp), b.maxHp]),
     friendlies: [...friendlies.values()].map(f => [f.id, +f.x.toFixed(1), +f.z.toFixed(1)]),
-    cannon: null,   // cannon removed for now
+    cannon: { x: CANNON.x, z: CANNON.z, built: cannon.built ? 1 : 0, bi: cannon.bi, needI: cannon.needI, hp: Math.round(cannon.hp), maxHp: CANNON.hp, aim: +cannon.aim.toFixed(3), range: +cannon.range.toFixed(1) },
     towers: towers.map(tw => [tw.x, tw.z]),
     fx: fxQueue.splice(0, fxQueue.length),
   });

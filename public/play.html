@@ -235,10 +235,18 @@ function updateHud(m){
     let onBuild=false, nearRam=null, nearBuild=null, trebChip='';
     if(rs && !rs.built && (mxp-rs.x)**2+(mzp-rs.z)**2 <= 9*9){ onBuild=true; if((cw||0)>0||(ci||0)>0) nearRam=rs; }
     for(const b of (m.builds||[])){ const dxx=mxp-b[2], dzz=mzp-b[3]; if(dxx*dxx+dzz*dzz > 8*8) continue; onBuild=true; if(!b[4]){ if((cw||0)>0||(ci||0)>0) nearBuild=b; } else if(b[1]==='trebuchet'){ trebChip=(ci||0)>0?'FIRE TREBUCHET (1 iron)':'NEED IRON TO FIRE TREB'; } }
+    let cannonChip=''; const cn=m.cannon;
+    if(cn && Math.hypot(mxp-cn.x, mzp-cn.z) <= CANNON.platformR+2){ onBuild=true;
+      if(!cn.built){ cannonChip=(ci||0)>0?('DUMP → BUILD CANNON  ⛏️ '+cn.bi+'/'+cn.needI):'NEED IRON TO BUILD CANNON'; }
+      else if(Math.hypot(mxp-cn.x, mzp-(cn.z+CANNON.breechDZ)) <= CANNON.stationR+0.6){ cannonChip=(ci||0)>0?'FIRE CANNON (1 iron)':'NEED IRON TO FIRE'; }
+      else if(Math.hypot(mxp-(cn.x-CANNON.cogDX), mzp-cn.z) <= CANNON.stationR+0.6){ cannonChip='HOLD — CRANK AIM (L/R)'; }
+      else if(Math.hypot(mxp-(cn.x+CANNON.cogDX), mzp-cn.z) <= CANNON.stationR+0.6){ cannonChip='HOLD — CRANK RANGE'; }
+    }
     let nearTree=false, nearIron=false;
     if(!onBuild){ for(const t of (m.trees||[])){ if((t[1]-mxp)**2+(t[2]-mzp)**2<=3.7*3.7){nearTree=true;break;} } for(const o of (m.ironNodes||[])){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} } }
     const cc=$('#chipChop');
     if(trebChip){ cc.style.display='block'; cc.textContent=trebChip; cc.style.color='#ffcf33'; }
+    else if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; }
     else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP RAM  \u{1FAB5} '+rs.bw+'/'+rs.needW+'  ⛏️ '+rs.bi+'/'+rs.needI; cc.style.color='#ffcf33'; }
     else if(nearBuild){ let txt='DUMP '+nearBuild[1].toUpperCase(); if(nearBuild[7]>0) txt+='  \u{1FAB5} '+nearBuild[5]+'/'+nearBuild[7]; if(nearBuild[8]>0) txt+='  ⛏️ '+nearBuild[6]+'/'+nearBuild[8]; cc.style.display='block'; cc.textContent=txt; cc.style.color='#ffcf33'; }
     else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; }
