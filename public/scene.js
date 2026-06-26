@@ -430,7 +430,9 @@ export function createWorld(canvas, opts = {}) {
       if (id !== localId) { rec.tx = x; rec.tz = z; rec.ta = a; }
       rec.g.visible = true; rec.dead = !alive;
       rec.body.material.emissive.setHex(slowed ? 0x2244ff : 0x000000); rec.body.material.emissiveIntensity = slowed ? 0.7 : 0;
-      if (rec.hpbar) { const frac = maxHp ? Math.max(0, Math.min(1, hp / maxHp)) : 1; if (Math.abs(frac - rec.hpFrac) > 0.01) { rec.hpFrac = frac; rec.hpbar.set(frac); } rec.hpbar.spr.visible = !!alive; }
+      const isLocal = (id === localId);   // don't float your own name/HP in your face
+      if (rec.label) rec.label.visible = !isLocal && !!alive;
+      if (rec.hpbar) { const frac = maxHp ? Math.max(0, Math.min(1, hp / maxHp)) : 1; if (Math.abs(frac - rec.hpFrac) > 0.01) { rec.hpFrac = frac; rec.hpbar.set(frac); } rec.hpbar.spr.visible = !isLocal && !!alive; }
     }
     for (const [id, rec] of playerMeshes) if (!seen.has(id)) { scene.remove(rec.g); playerMeshes.delete(id); }
     const seenT = new Set();

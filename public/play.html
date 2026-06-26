@@ -114,7 +114,7 @@ import { connect } from './net.js';
 import { PLAYER, LANE, clampToLane, PERK_FX, CANNON, ABILITIES } from './shared.js';
 import { Sound } from './sound.js';
 const $ = s => document.querySelector(s);
-const world = createWorld($('#c'), { labels: false, quality: 'low' });
+const world = createWorld($('#c'), { labels: true, quality: 'low' });
 const THREE = world.THREE;
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400);
 
