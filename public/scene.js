@@ -695,7 +695,7 @@ export function createWorld(canvas, opts = {}) {
     setKingPos: (x, z, a) => { kingT.x = x; kingT.z = z; if (typeof a === 'number') kingT.a = a; king.position.x = x; king.position.z = z; },
     setLocalWizard: () => { localWizard = true; },
     setWizPos: (x, z, a) => { wizT.x = x; wizT.z = z; if (typeof a === 'number') wizT.a = a; wizT.has = 1; wiz.position.x = x; wiz.position.z = z; },
-    getPlayerMesh: (id) => playerMeshes.get(id), getWizPos: () => ({ x: wiz.position.x, z: wiz.position.z }), render: (cam) => renderer.render(scene, cam) };
+    getPlayerMesh: (id) => playerMeshes.get(id), getWizPos: () => ({ x: wiz.position.x, z: wiz.position.z }), groundY: (x, z) => terrainY(x, z), render: (cam) => renderer.render(scene, cam) };
 }
 
 // ---- scenery builders ----

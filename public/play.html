@@ -119,6 +119,7 @@ const THREE = world.THREE;
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400);
 
 let myId=null, weapons=null, myWep='blaster', lastSnap=null, facing=Math.PI;
+let lastTrees=[], lastIron=[];   // snapshots only carry trees/ore every 4th frame — cache them so the chop/mine prompt doesn't strobe
 let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
 let cosmeticsCat=null, cosmeticSlots=[], myCos={hat:'none',cape:'none',helmet:'none'}, myCosOwned=[];
 let myPos=null, myWasDead=false;   // client-authoritative local position
@@ -222,7 +223,8 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
     if(aiming) facing=aimAssist(px,pz,Math.atan2(aimVX,aimVY));
     else if(usingMouse){ ray.setFromCamera(mouseNDC,camera); ray.ray.intersectPlane(groundPlane,gpt); if(gpt) facing=Math.atan2(gpt.x-px,gpt.z-pz); }
     world.setLocalPos(myId, px, pz, facing);                    // draw my avatar from prediction, instantly
-    camera.position.set(px,17,pz+19); camera.lookAt(px,1.5,pz-13);
+    const gy = world.groundY ? world.groundY(px,pz) : 0;        // ride up with the hill when climbing to duel Jeremy
+    camera.position.set(px,17+gy,pz+19); camera.lookAt(px,1.5+gy,pz-13);
   } else { camera.position.set(0,34,70); camera.lookAt(0,0,0); }
   { const frac=Math.min(1,(Date.now()-myAbilityAt)/myAbility.cd); const ab=$('#abilityBtn'); ab.firstElementChild.style.height=((1-frac)*100)+'%'; ab.classList.toggle('ready', frac>=1); }
   world.render(camera); requestAnimationFrame(loop);
@@ -263,7 +265,8 @@ function updateHud(m){
       else if(Math.hypot(mxp-(cn.x+CANNON.cogDX), mzp-cn.z) <= CANNON.stationR+0.6){ cannonChip='HOLD — CRANK RANGE'; }
     }
     let nearTree=false, nearIron=false;
-    if(!onBuild){ for(const t of (m.trees||[])){ if((t[1]-mxp)**2+(t[2]-mzp)**2<=3.7*3.7){nearTree=true;break;} } for(const o of (m.ironNodes||[])){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} } }
+    if(m.trees) lastTrees=m.trees; if(m.ironNodes) lastIron=m.ironNodes;
+    if(!onBuild){ for(const t of lastTrees){ if((t[1]-mxp)**2+(t[2]-mzp)**2<=3.7*3.7){nearTree=true;break;} } for(const o of lastIron){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} } }
     const cc=$('#chipChop');
     if(trebChip){ cc.style.display='block'; cc.textContent=trebChip; cc.style.color='#ffcf33'; }
     else if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; }

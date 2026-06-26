@@ -244,6 +244,35 @@ function damageBuildStruct(b, dmg) {
 }
 // ---------- combat / gathering ----------
 const GATHER_CD = 250;   // fixed ms between chops/mines/dumps — same for EVERY class, independent of weapon fire rate
+
+// ---- solid walls (mirror the visual lane/pocket geometry) so projectiles can't fly through them ----
+const WALLS = (() => {
+  const HW = LANE.halfWidth, OX = POCKET.outerX, zA = POCKET.zMin, zB = POCKET.zMax, W = [];
+  const box = (x0, z0, x1, z1) => W.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1) });
+  const PX = 2.1, PZ = 2.1;   // wall half-thickness + a little pad so fast shots can't graze through a corner
+  for (const s of [-1, 1]) {
+    const wx = s * (HW + 1.5);
+    box(wx - PX, LANE.minZ, wx + PX, zA);     // lane wall, front of the pocket opening
+    box(wx - PX, zB, wx + PX, LANE.maxZ);     // lane wall, behind the pocket opening
+    const ox = s * (OX + 1.5);
+    box(ox - PX, zA - 1, ox + PX, zB + 1);    // pocket outer wall
+    box(s * HW, zA - PZ, s * OX, zA + PZ);     // pocket end cap (front corner)
+    box(s * HW, zB - PZ, s * OX, zB + PZ);     // pocket end cap (back corner)
+  }
+  return W;
+})();
+function segHitsWall(x0, z0, x1, z1) {   // Liang-Barsky slab clip: does the segment cross any wall box?
+  const dx = x1 - x0, dz = z1 - z0;
+  for (const w of WALLS) {
+    let t0 = 0, t1 = 1, ok = true;
+    for (const [p, q] of [[-dx, x0 - w.x0], [dx, w.x1 - x0], [-dz, z0 - w.z0], [dz, w.z1 - z0]]) {
+      if (p === 0) { if (q < 0) { ok = false; break; } }
+      else { const r = q / p; if (p < 0) { if (r > t1) { ok = false; break; } if (r > t0) t0 = r; } else { if (r < t0) { ok = false; break; } if (r < t1) t1 = r; } }
+    }
+    if (ok && t0 <= t1) return true;
+  }
+  return false;
+}
 function playerFire(id) {
   const p = players.get(id); if (!p || !p.alive || (phase !== 'combat' && phase !== 'intermission')) return;
   const w = WEAPONS[p.wep]; const t = now();
@@ -325,7 +354,7 @@ function kingAttack(id, kind, tx, tz) {
   if (kind === 'summon') { spawnWave(waveSize()); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }
   let cx = king.x, cz = king.z;
   // CAMP.z0 - 5: the King can't bombard the attackers' home base (stops ~5 units in front of the camp fence).
-  if (kind === 'cannon') { cx = clamp(+tx || 0, -LANE.halfWidth, LANE.halfWidth); cz = clamp(+tz || 0, LANE.minZ, CAMP.z0 - 5); }
+  if (kind === 'cannon') { cx = clamp(+tx || 0, -LANE.halfWidth, LANE.halfWidth); cz = clamp(+tz || 0, LANE.duelZ, CAMP.z0 - 5); }   // can target down into the palace to hit attackers storming the hill
   aoePlayers(cx, cz, cfg.radius * (1 + 0.2 * king.up.reach), cfg.dmg * (1 + 0.2 * king.up.might));
   aoeBuildsFriendlies(cx, cz, cfg.radius * (1 + 0.2 * king.up.reach), cfg.dmg * (1 + 0.2 * king.up.might));
   if (ram.active && Math.hypot(ram.x - cx, ram.z - cz) <= cfg.radius + 2) { ram.z = Math.min(RAM.startZ, ram.z + RAM.knockback); fxQueue.push({ k: 'ramhitback', x: ram.x, z: ram.z }); }
@@ -336,7 +365,7 @@ function wizardSpell(id, kind, tx, tz) {
   const cfg = WIZARD.spells[kind]; if (!cfg) return; const t = now(); if (wizard.mana < cfg.mana || t - wizard.cd[kind] < cfg.cd) return;
   wizard.mana -= cfg.mana; wizard.cd[kind] = t;
   fxQueue.push({ k: 'castlabel', x: wizard.x, z: wizard.z, y: 20, text: (clients.get(id)?.name || 'The Wizard') + ': ' + ({ heal: 'Heal', meteor: 'Meteor', freeze: 'Frost Nova', rally: 'Rally' }[kind] || kind), color: 0xb07bff });
-  const x = clamp(+tx || 0, -LANE.halfWidth, LANE.halfWidth), z = clamp(+tz || 0, LANE.minZ, CAMP.z0 - 5);   // no bombarding the home base
+  const x = clamp(+tx || 0, -LANE.halfWidth, LANE.halfWidth), z = clamp(+tz || 0, LANE.duelZ, CAMP.z0 - 5);   // down into the palace (defend Jeremy on the hill), but no bombarding the home base
   if (kind === 'heal') { king.hp = Math.min(king.maxHp, king.hp + cfg.amount); fxQueue.push({ k: 'heal', x: king.x, z: king.z }); }
   else if (kind === 'meteor') { aoePlayers(x, z, cfg.radius, cfg.dmg); fxQueue.push({ k: 'meteor', x, z, r: cfg.radius }); }
   else if (kind === 'freeze') { for (const p of players.values()) if (p.alive && Math.hypot(p.x - x, p.z - z) <= cfg.radius) p.slowUntil = t + cfg.dur; fxQueue.push({ k: 'freeze', x, z, r: cfg.radius }); }
@@ -461,20 +490,23 @@ setInterval(() => {
   for (const pr of projectiles) {
     pr.x += pr.vx * dt; pr.z += pr.vz * dt; if (pr.arc) { pr.y += pr.vy * dt; pr.vy -= 22 * dt; }
     let done = false;
-    if (pr.foe) {
+    // Solid walls: stop flat shots that cross a wall (arcing lobs fly over, so skip them while airborne).
+    const px = pr.x - pr.vx * dt, pz = pr.z - pr.vz * dt;
+    if (!(pr.arc && pr.y > 7) && segHitsWall(px, pz, pr.x, pr.z)) { done = true; pr.splash = 0; fxQueue.push({ k: 'troophit', x: pr.x, z: pr.z }); }
+    if (!done && pr.foe) {
       // enemy arrow: damage the nearest attacker it touches
       let hp_ = null, hb2 = Infinity; for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - pr.x) ** 2 + (p.z - pr.z) ** 2; if (d < hb2) { hb2 = d; hp_ = p; } }
       if (hp_ && Math.sqrt(hb2) <= 1.5) { damagePlayer(hp_, pr.dmg); fxQueue.push({ k: 'troophit', x: hp_.x, z: hp_.z }); done = true; }
-    } else if (pr.gateOnly) {
+    } else if (!done && pr.gateOnly) {
       if (up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
-    } else {
+    } else if (!done) {
       let hitT = null, hb = Infinity; if (!pr.landOnly || pr.y < 2.5) for (const tr of troops.values()) { const d = (tr.x - pr.x) ** 2 + (tr.z - pr.z) ** 2; if (d < hb) { hb = d; hitT = tr; } }
       if (hitT && Math.sqrt(hb) <= TROOP.radius + 0.6) { damageTroop(hitT, pr.dmg, pr.owner); done = true; }
       if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
       if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
     }
     if (!done && pr.arc && pr.y <= 0) done = true;
-    if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.minZ - 8 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000 || (pr.range && (pr.x - pr.ox) ** 2 + (pr.z - pr.oz) ** 2 >= pr.range * pr.range))) done = true;
+    if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.duelZ - 12 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000 || (pr.range && (pr.x - pr.ox) ** 2 + (pr.z - pr.oz) ** 2 >= pr.range * pr.range))) done = true;
     if (done) {
       if (pr.splash > 0) {
         if (!pr.gateOnly) for (const tr of troops.values()) if (Math.hypot(tr.x - pr.x, tr.z - pr.z) <= pr.splash + TROOP.radius) damageTroop(tr, pr.dmg * 0.6, pr.owner);
