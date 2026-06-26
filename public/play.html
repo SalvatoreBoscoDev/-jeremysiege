@@ -27,6 +27,10 @@
   #moveHint { position:fixed; left:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
   #aimHint { position:fixed; right:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
   #chipChop { position:fixed; right:0; bottom:200px; width:50%; text-align:center; font-weight:900; font-size:20px; color:#9be36a; text-shadow:0 1px 4px #000; pointer-events:none; display:none; }
+  #abilityBtn { position:fixed; bottom:150px; left:50%; transform:translateX(-50%); width:86px; height:86px; border-radius:50%; background:rgba(0,0,0,.5); border:3px solid #ffd23f; color:#fff; font-weight:900; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; }
+  #abilityBtn.ready { border-color:#9be36a; box-shadow:0 0 18px #9be36a66; }
+  #abilityBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.62); pointer-events:none; }
+  #abilityBtn .an { position:relative; font-size:13px; line-height:1.1; padding:0 4px; } #abilityBtn .ak { position:relative; font-size:10px; opacity:.7; }
   #respawn { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(120,0,0,.35); z-index:5; }
   #respawn .t { font-size:40px; font-weight:900; text-shadow:0 2px 8px #000; }
   #banner { position:fixed; top:42%; left:0; right:0; text-align:center; pointer-events:none; z-index:6; }
@@ -44,7 +48,8 @@
   #inter .cards { display:flex; gap:7px; justify-content:center; flex-wrap:wrap; max-width:560px; }
   .card { flex:1 1 28%; min-width:92px; background:rgba(0,0,0,.5); border:2px solid #ffffff22; border-radius:12px; padding:9px 6px; }
   .card .cn { font-size:13px; font-weight:900; } .card .cd2 { font-size:10px; opacity:.65; margin-top:2px; } .card .cv { font-size:11px; color:#ffd23f; margin-top:3px; font-weight:800; }
-  .card.perk.sel { border-color:#9be36a; } .card.picked { opacity:.4; } .card.tp.sel { border-color:#ffd23f; box-shadow:0 0 10px #ffd23f66; } .card.poor { opacity:.5; }
+  .card .px { font-size:11px; color:#ffd23f; margin-top:3px; font-weight:800; }
+  .card.perk.sel { border-color:#9be36a; } .card.picked { opacity:.4; } .card.tp.sel { border-color:#ffd23f; box-shadow:0 0 10px #ffd23f66; } .card.poor { opacity:.5; } .card.owned { opacity:.5; border-color:#9be36a; }
   #treasury { color:#ffd23f; font-weight:900; }
   #res { font-size:12px; font-weight:800; margin-top:3px; text-shadow:0 1px 2px #000; }
   .card.wbuy.owned { border-color:#9be36a; box-shadow:0 0 8px #9be36a55; }
@@ -69,6 +74,7 @@
 <div id="moveZone" class="stickzone"><div id="moveStick" class="stick"><div id="moveNub" class="nub"></div></div></div>
 <div id="aimZone" class="stickzone"><div id="aimStick" class="stick"><div id="aimNub" class="nub"></div></div></div>
 <div id="moveHint">MOVE</div><div id="aimHint">AIM & FIRE</div><div id="chipChop">CHOP!</div>
+<div id="abilityBtn"><div class="cdfill"></div><div class="an">—</div><div class="ak">Q</div></div>
 <div id="banner"><span id="bannerTxt"></span></div>
 <div id="armory"></div>
 <div id="respawn"><div class="t">DOWN!</div><div style="font-size:22px;margin-top:8px">Respawning...</div></div>
@@ -86,36 +92,47 @@
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
-import { PLAYER, LANE, clampToLane, PERK_FX } from './shared.js';
+import { PLAYER, LANE, clampToLane, PERK_FX, CANNON, ABILITIES } from './shared.js';
 const $ = s => document.querySelector(s);
 const world = createWorld($('#c'), { labels: false, quality: 'low' });
 const THREE = world.THREE;
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400);
 
 let myId=null, weapons=null, myWep='blaster', lastSnap=null, facing=Math.PI;
-let perksCat=null, perkOrder=[], wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
-let myPos=null, mySwift=0;   // client-authoritative local position + swift-perk stacks (for local speed)
-const params = new URLSearchParams(location.search); const preName = params.get('name');
+let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
+let myPos=null;   // client-authoritative local position
+let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
+const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
 if (preName) $('#name').value = preName;
+const myAbility = ABILITIES[preClass] || ABILITIES.blaster;   // class active ability
+let myAbilityAt = 0, dashUntil = 0;
+$('#abilityBtn .an').textContent = myAbility.name;
+function useAbility(){
+  if(!net.ready || myId==null || !lastSnap || lastSnap.phase!=='combat') return;
+  const me = lastSnap.players.find(p=>p[0]===myId); if(!me || !me[6]) return;
+  const t = Date.now(); if(t - myAbilityAt < myAbility.cd) return; myAbilityAt = t;
+  if(myAbility.kind==='dash') dashUntil = t + myAbility.dur; else net.send({t:'ability'});
+  banner(myAbility.name+'!', '#ffd23f', 700);
+}
 
 const net = connect({
   open(){ if (preName) doJoin(); },
-  welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; world.setLocalId(myId); renderWep('blaster'); buildInter(); buildArmory(); },
+  welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); },
   roster(m){ world.setRoster(m.players); },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
   event(ev){
     if(ev.kind==='round') banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f');
     else if(ev.kind==='intermission') banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600);
     else if(ev.kind==='gatebreached') banner('GATE DOWN!', '#ff7adf');
-    else if(ev.kind==='perkok'){ myPerkRound=curRound(); if(ev.perk==='swift') mySwift++; markPerks(); banner('Perk: '+((perksCat&&perksCat[ev.perk]||{}).name||ev.perk),'#9be36a',900); }
+    else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); }
     else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); }
     else if(ev.kind==='gameover') showOver(ev.result);
-    else if(ev.kind==='reset'){ mySwift=0; myPos=null; hideOver(); }
+    else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; refreshShop(); hideOver(); }
   },
   close(){ banner('Disconnected - reload', '#fff'); },
 });
 
-function doJoin(){ const name=($('#name').value||'Hero').trim().slice(0,16)||'Hero'; net.join('player',name); $('#join').style.display='none'; startLoop(); }
+function doJoin(){ const name=($('#name').value||'Hero').trim().slice(0,16)||'Hero'; net.send({t:'join', role:'player', name, class: preClass||'blaster'}); $('#join').style.display='none'; startLoop(); }
 $('#go').onclick = doJoin; $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') doJoin(); });
 function renderWep(key){ const w=(weapons&&weapons[key])||{name:key,color:0xffffff}; const hex='#'+((w.color||0xffffff).toString(16).padStart(6,'0')); $('#weps').innerHTML=`<div class="wep" style="border-color:${hex}">${w.name}</div>`; }
 
@@ -139,6 +156,8 @@ aZone.addEventListener('touchend', endAim); aZone.addEventListener('touchcancel'
 const keys={}; let usingMouse=false, mouseDown=false;
 const mouseNDC=new THREE.Vector2(), ray=new THREE.Raycaster(), groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0), gpt=new THREE.Vector3();
 addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true); addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
+addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='q') useAbility(); });
+{ const ab=$('#abilityBtn'); ab.addEventListener('touchstart', e=>{ e.preventDefault(); useAbility(); }, {passive:false}); ab.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation(); useAbility(); }); }
 addEventListener('mousemove', e=>{ usingMouse=true; mouseNDC.x=(e.clientX/innerWidth)*2-1; mouseNDC.y=-(e.clientY/innerHeight)*2+1; });
 addEventListener('mousedown', ()=>mouseDown=true); addEventListener('mouseup', ()=>mouseDown=false);
 
@@ -164,7 +183,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       // CLIENT-AUTHORITATIVE: simulate my own movement locally so input feels instant.
       let ix=moveX, iy=moveY; if(keys['a'])ix=-1; if(keys['d'])ix=1; if(keys['w'])iy=-1; if(keys['s'])iy=1;
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
-      const spd=PLAYER.speed*(1+mySwift*PERK_FX.speed)*(slowed?0.4:1);
+      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1);
       myPos.x+=ix*spd*dt; myPos.z+=iy*spd*dt;
       [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z);
       if(lastSnap.gate && lastSnap.gate.hp>0 && myPos.z<LANE.wallZ+3.5) myPos.z=LANE.wallZ+3.5;
@@ -177,6 +196,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
     world.setLocalPos(myId, px, pz, facing);                    // draw my avatar from prediction, instantly
     camera.position.set(px,17,pz+19); camera.lookAt(px,1.5,pz-13);
   } else { camera.position.set(0,34,70); camera.lookAt(0,0,0); }
+  { const frac=Math.min(1,(Date.now()-myAbilityAt)/myAbility.cd); const ab=$('#abilityBtn'); ab.firstElementChild.style.height=((1-frac)*100)+'%'; ab.classList.toggle('ready', frac>=1); }
   world.render(camera); requestAnimationFrame(loop);
 }
 
@@ -191,36 +211,54 @@ function updateHud(m){
     : m.phase==='intermission' ? `INTERMISSION  -  next round in ${Math.ceil(m.timeLeft/1000)}s`
     : m.phase==='lobby' ? 'Waiting for the King to start...' : '';
   let obj='';
-  if(m.phase==='intermission') obj='<span style="color:#8fe3ff">Roam camp: Armorer = perks, Armory = weapons</span>';
-  else if(m.phase==='combat'){ if(gateUp) obj = m.ram ? '<span style="color:#9be36a">PUSH THE RAM into the gate!</span>' : 'Smash the GATE! Gather WOOD (left) + IRON (right) for the ram'; else obj='<span style="color:#ff7adf">GATE DOWN - KILL JEREMY!</span>'; }
+  if(m.phase==='intermission') obj='<span style="color:#8fe3ff">Camp: LEFT stall = Armor &amp; upgrades · RIGHT stall = Weapons</span>';
+  else if(m.phase==='combat'){ if(gateUp) obj = m.ram ? '<span style="color:#9be36a">PUSH THE RAM into the gate!</span>' : 'Gather WOOD + IRON, haul it to the RAM frame and DUMP to build it'; else obj='<span style="color:#ff7adf">GATE DOWN - KILL JEREMY!</span>'; }
   $('#objective').innerHTML=obj;
   const me=m.players.find(p=>p[0]===myId);
-  if(me){ const [,mxp,mzp,,hp,wep,alive,,maxHp,gold]=me; $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
+  if(me){ const [,mxp,mzp,,hp,wep,alive,,maxHp,gold,cw,ci]=me; $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
     if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
     myGold = gold||0;
     $('#respawn').style.display = alive?'none':'flex';
-    let nearTree=false, nearIron=false;
+    let nearTree=false, nearIron=false, nearRam=false;
     for(const t of (m.trees||[])){ if((t[1]-mxp)**2+(t[2]-mzp)**2<=3.7*3.7){nearTree=true;break;} }
     for(const o of (m.ironNodes||[])){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} }
-    const cc=$('#chipChop'); if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else cc.style.display='none';
+    const rs=m.ramSite; if(rs && !rs.built && ((cw||0)>0||(ci||0)>0)){ if((mxp-rs.x)**2+(mzp-rs.z)**2 <= 9*9) nearRam=true; }
+    let nearBuild=''; if(!nearTree && !nearIron && !nearRam && ((cw||0)>0||(ci||0)>0)){ for(const b of (m.builds||[])){ if(!b[4]){ const dxx=mxp-b[2], dzz=mzp-b[3]; if(dxx*dxx+dzz*dzz <= 8*8){ nearBuild=b[1]; break; } } } }
+    // cannon crew prompts (on the platform): build, crank a cog, or fire the breech
+    let cannonChip=''; const cn=m.cannon; const sr=(CANNON.stationR+0.6)**2;
+    if(cn && (mxp-cn.x)**2+(mzp-cn.z)**2 <= (CANNON.platformR+2)**2){
+      if(!cn.built){ if((ci||0)>0) cannonChip='DUMP → BUILD CANNON'; }
+      else if((mxp-cn.x)**2+(mzp-(cn.z+CANNON.breechDZ))**2 <= sr){ cannonChip=(ci||0)>0?'FIRE CANNON (1 iron)':'NEED IRON TO FIRE'; }
+      else if((mxp-(cn.x-CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK AIM'; }
+      else if((mxp-(cn.x+CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK RANGE'; }
+    }
+    const cc=$('#chipChop'); if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; } else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP → BUILD RAM'; cc.style.color='#ffcf33'; } else if(nearBuild){ cc.style.display='block'; cc.textContent='DUMP → BUILD '+nearBuild.toUpperCase(); cc.style.color='#ffcf33'; } else cc.style.display='none';
     const inArmory = (m.phase==='combat'||m.phase==='intermission') && campCfg && ((mxp-campCfg.armory.x)**2+(mzp-campCfg.armory.z)**2 <= (campCfg.armory.r+1)*(campCfg.armory.r+1));
     const ar=$('#armory'); ar.style.display = inArmory?'flex':'none';
     if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
   }
-  $('#res').innerHTML = `\u{1FAB5} ${m.wood||0}/${m.woodNeeded||0} &nbsp; \u26cf\ufe0f ${m.iron||0}/${m.ironNeeded||0} &nbsp; \u{1F4B0} ${myGold}`;
+  { const cw=me?(me[10]||0):0, ci=me?(me[11]||0):0, rs=m.ramSite; const ramTxt = !rs ? '' : (rs.active ? ' &nbsp; <span style="color:#ffcf33">RAM ROLLING</span>' : ` &nbsp; Ram \u{1FAB5}${rs.bw}/${rs.needW} \u26cf\ufe0f${rs.bi}/${rs.needI}`);
+    $('#res').innerHTML = `Pack \u{1FAB5} ${cw} &nbsp; \u26cf\ufe0f ${ci} &nbsp; \u{1F4B0} ${myGold}` + ramTxt; }
   const meP = m.players.find(p=>p[0]===myId);
   let atArmorer=false;
-  if(meP && m.phase==='intermission' && campCfg){ const dx=meP[1]-campCfg.armorer.x, dz=meP[2]-campCfg.armorer.z; atArmorer = (dx*dx+dz*dz <= (campCfg.armorer.r+1)*(campCfg.armorer.r+1)) && myPerkRound!==m.round; }
+  if(campCfg && (m.phase==='combat'||m.phase==='intermission')){ const ax=myPos?myPos.x:(meP?meP[1]:999), az=myPos?myPos.z:(meP?meP[2]:999); const dx=ax-campCfg.armorer.x, dz=az-campCfg.armorer.z; atArmorer = dx*dx+dz*dz <= (campCfg.armorer.r+1.5)*(campCfg.armorer.r+1.5); }
   $('#inter').style.display = atArmorer ? 'flex' : 'none';
-  if(atArmorer) markPerks();
+  if(atArmorer) refreshShop();
 }
 let bT; function banner(txt,color,hold){ const el=$('#bannerTxt'); el.textContent=txt; el.style.color=color||'#fff'; el.style.opacity=1; clearTimeout(bT); bT=setTimeout(()=>el.style.opacity=0, hold||1500); }
 function curRound(){ return lastSnap?lastSnap.round:0; }
-function buildInter(){ if(!perksCat) return; const el=$('#inter');
-  el.innerHTML='<div class="lab" style="color:#66ff9a">ARMORER - pick a perk (free)</div><div class="cards" id="perkCards"></div>';
-  const pc=$('#perkCards'); perkOrder.forEach(k=>{ const it=perksCat[k]; const c=document.createElement('div'); c.className='card perk'; c.dataset.k=k; c.innerHTML='<div class="cn">'+it.name+'</div><div class="cd2">'+it.desc+'</div>'; c.onclick=()=>{ if(myPerkRound!==curRound()) net.send({t:'perk',perk:k}); }; pc.appendChild(c); });
+function perkCost(k){ return (perkBuyCat?perkBuyCat[k]:0) * ((myPerks[k]||0)+1); }
+function buildShop(){ if(!perksCat||!perkBuyCat) return; const el=$('#inter');
+  el.innerHTML='<div class="lab" style="color:#9be36a">ARMOR &amp; UPGRADES - buy with gold</div><div class="cards" id="perkCards"></div>';
+  const pc=$('#perkCards'); perkOrder.forEach(k=>{ const it=perksCat[k]; const c=document.createElement('div'); c.className='card perk'; c.dataset.k=k;
+    c.innerHTML='<div class="cn">'+it.name+'</div><div class="cd2">'+it.desc+'</div><div class="px"></div>';
+    c.onclick=()=>{ const owned=myPerks[k]||0; if(owned<perkMax && myGold>=perkCost(k)) net.send({t:'buyperk',perk:k}); };
+    pc.appendChild(c); });
+  refreshShop();
 }
-function markPerks(){ const picked=myPerkRound===curRound(); document.querySelectorAll('.card.perk').forEach(c=>c.classList.toggle('picked',picked)); }
+function refreshShop(){ document.querySelectorAll('#perkCards .card.perk').forEach(c=>{ const k=c.dataset.k; const owned=myPerks[k]||0; const maxed=owned>=perkMax; const cost=perkCost(k);
+  const px=c.querySelector('.px'); if(px) px.textContent = maxed ? ('MAX · Lv'+owned) : (cost+'g'+(owned?(' · Lv'+owned):''));
+  c.classList.toggle('owned', maxed); c.classList.toggle('poor', !maxed && myGold<cost); }); }
 function buildArmory(){ if(!wbuy) return; const el=$('#armory'); el.innerHTML='<div class="ttl">ARMORY - buy a weapon</div>';
   (wbuyOrder||[]).forEach(k=>{ const cost=wbuy[k]; const w=weapons[k]||{name:k}; const b=document.createElement('div'); b.className='wb'; b.dataset.k=k; b.dataset.cost=cost; b.textContent=w.name+' '+cost+'g'; b.onclick=()=>{ if(myWep!==k && myGold>=cost) net.send({t:'buyweapon',w:k}); }; el.appendChild(b); }); }
 function showOver(res){ const win = res==='attackers'; $('#over').style.display='flex'; $('#over').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')';

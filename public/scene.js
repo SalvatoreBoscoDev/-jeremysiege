@@ -2,7 +2,7 @@
 // Per-frame interpolation keeps the 22Hz feed smooth. Tone mapping + (high-quality)
 // shadows + environment props make it feel less flat.
 import * as THREE from './vendor/three.module.js';
-import { LANE, POCKET, CAMP, HILL, WIZ_TOWER, WEAPONS, WEAPON_ORDER, FOREST, TREE, RAM, GATE, TOWER } from './shared.js';
+import { LANE, POCKET, CAMP, HILL, WIZ_TOWER, WEAPONS, WEAPON_ORDER, FOREST, TREE, RAM, GATE, TOWER, CANNON } from './shared.js';
 
 export function createWorld(canvas, opts = {}) {
   const labels = opts.labels !== false;
@@ -59,7 +59,7 @@ export function createWorld(canvas, opts = {}) {
     for (const zc of [POCKET.zMin, POCKET.zMax]) { const cw = new THREE.Mesh(new THREE.BoxGeometry(POCKET.outerX - LANE.halfWidth + 2, 7, 2), wmat); cw.position.set(side * ((LANE.halfWidth + POCKET.outerX) / 2), 3.5, zc); cw.castShadow = realShadows; scene.add(cw); }
     const fw = POCKET.outerX - LANE.halfWidth; const floor = new THREE.Mesh(new THREE.PlaneGeometry(fw, POCKET.zMax - POCKET.zMin), new THREE.MeshStandardMaterial({ color: side < 0 ? 0x4f3f2a : 0x67676f, roughness: 1 })); floor.rotation.x = -Math.PI / 2; floor.position.set(side * (LANE.halfWidth + fw / 2), 0.02, (POCKET.zMin + POCKET.zMax) / 2); floor.receiveShadow = realShadows; scene.add(floor);
     // a sign-banner at the opening
-    const ban = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6), bannerMaterial()); ban.position.set(wx, 4.4, LANE.minZ + 24); ban.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scene.add(ban);
+    const ban = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6), bannerMaterial()); ban.position.set(wx, 4.4, (POCKET.zMin + POCKET.zMax) / 2); ban.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; scene.add(ban);
   }
 
   // ---- torches ----
@@ -161,6 +161,38 @@ export function createWorld(canvas, opts = {}) {
     for (let i = 0; i < towerMeshes.length; i++) { const t = list[i]; if (t) { towerMeshes[i].visible = true; towerMeshes[i].position.set(t[0], 0, t[1]); } else towerMeshes[i].visible = false; }
   }
 
+  // ---- buildable structures + friendly troops ----
+  const buildMeshes = new Map(); const friendlyMeshes = new Map();
+  function ensureBuild(id, kind) {
+    let g = buildMeshes.get(id); if (g) return g;
+    g = new THREE.Group();
+    if (kind === 'trebuchet') {
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a3f24, roughness: 0.9, transparent: true, opacity: 1 });
+      const base = new THREE.Mesh(new THREE.BoxGeometry(4, 0.7, 5), woodMat); base.position.y = 0.35; g.add(base);
+      for (const sx of [-1.5, 1.5]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, 6.4, 6), woodMat); leg.position.set(sx, 3.2, 0); leg.rotation.z = sx > 0 ? 0.34 : -0.34; g.add(leg); }
+      const apex = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4.4), woodMat); apex.position.y = 6; g.add(apex);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 7.6), woodMat); arm.position.set(0, 5.6, -1.4); arm.rotation.x = -0.85; g.add(arm);
+      const cw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), woodMat); cw.position.set(0, 3.8, 2.1); g.add(cw);
+      const glow = new THREE.Sprite(glowMaterial(0xffd23f)); glow.scale.set(7, 7, 1); glow.position.y = 6.6; g.add(glow);
+      g.userData = { tentMat: woodMat };
+      scene.add(g); buildMeshes.set(id, g); return g;
+    }
+    const tentCol = kind === 'hospital' ? 0xe6edf2 : 0x355f43;
+    const tentMat = new THREE.MeshStandardMaterial({ color: tentCol, roughness: 0.92, transparent: true, opacity: 1 });
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(4.6, 5, 4), tentMat); tent.rotation.y = Math.PI / 4; tent.position.y = 2.6; g.add(tent); g.userData = { tentMat };
+    const glow = new THREE.Sprite(glowMaterial(kind === 'hospital' ? 0xff5555 : 0x66ff9a)); glow.scale.set(7, 7, 1); glow.position.y = 6.4; g.add(glow);
+    if (kind === 'hospital') { const m = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xaa0000, emissiveIntensity: 0.8 }); const a = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 0.2), m); a.position.set(0, 6.2, 2.4); const b = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.6, 0.2), m); b.position.set(0, 6.2, 2.4); g.add(a, b); }
+    else { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 8, 6), new THREE.MeshStandardMaterial({ color: 0x4a3a2a })); pole.position.set(0, 4, 0); const flag = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2), new THREE.MeshStandardMaterial({ color: 0x66ff9a, side: THREE.DoubleSide })); flag.position.set(1.7, 6.6, 0); g.add(pole, flag); }
+    scene.add(g); buildMeshes.set(id, g); return g;
+  }
+  function ensureFriendly(id) {
+    let g = friendlyMeshes.get(id); if (g) return g;
+    g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x4caf50 })); body.position.y = 1.35;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x66d977 })); head.position.y = 2.5;
+    g.add(body, head); g.userData = { tx: 0, tz: 0 }; scene.add(g); friendlyMeshes.set(id, g); return g;
+  }
+
   // ---- gold ore veins ----
   const oreMeshes = new Map();
   const oreRockMat = new THREE.MeshStandardMaterial({ color: 0x5a5560, roughness: 1, flatShading: true });
@@ -228,6 +260,24 @@ export function createWorld(canvas, opts = {}) {
   if (realShadows) { ramLog.castShadow = true; ramHead.castShadow = true; }
   const ramGlow = new THREE.Sprite(glowMaterial(0xffcc66)); ramGlow.scale.set(12, 12, 1); ramGlow.position.y = 3; ramGlow.visible = false; ram.add(ramGlow);
   let ramT = null;
+
+  // ---- the CANNON: circular platform + circling ramp + pivoting barrel + landing marker ----
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b6675, roughness: 0.95 });
+  const cannonGroup = new THREE.Group(); cannonGroup.position.set(CANNON.x, 0, CANNON.z); scene.add(cannonGroup);
+  const plat = new THREE.Mesh(new THREE.CylinderGeometry(CANNON.platformR, CANNON.platformR + 0.7, CANNON.platformY, 24), stoneMat); plat.position.y = CANNON.platformY / 2; plat.castShadow = realShadows; plat.receiveShadow = realShadows; cannonGroup.add(plat);
+  const platTop = new THREE.Mesh(new THREE.CylinderGeometry(CANNON.platformR - 0.3, CANNON.platformR - 0.3, 0.3, 24), new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 1 })); platTop.position.y = CANNON.platformY + 0.15; cannonGroup.add(platTop);
+  // one simple straight ramp up the camp-facing (-x) side
+  const _run = 6.5, _rise = CANNON.platformY, _sl = Math.hypot(_run, _rise), _th = Math.atan2(_rise, _run);
+  const ramp = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 3.8), new THREE.MeshStandardMaterial({ color: 0x7d6a52, roughness: 1 })); ramp.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2, 0); ramp.rotation.z = _th; ramp.receiveShadow = realShadows; cannonGroup.add(ramp);
+  for (const sz of [-1.95, 1.95]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(_sl, 0.5, 0.3), stoneMat); rail.position.set(-(CANNON.platformR + _run / 2 - 0.4), _rise / 2 + 0.45, sz); rail.rotation.z = _th; cannonGroup.add(rail); }
+  // pivoting barrel assembly on top
+  const barrelPivot = new THREE.Group(); barrelPivot.position.y = CANNON.platformY + 1.2; cannonGroup.add(barrelPivot);
+  const carriage = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 3.2), new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.8 })); carriage.position.y = -0.3; barrelPivot.add(carriage);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.95, 5.2, 14), new THREE.MeshStandardMaterial({ color: 0x2f3038, metalness: 0.65, roughness: 0.4 })); barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.5, -2); barrelPivot.add(barrel);
+  for (const sx of [-1.5, 1.5]) { const cog = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0x8a7a3a, metalness: 0.6 })); cog.rotation.z = Math.PI / 2; cog.position.set(sx, 0.2, 1.2); barrelPivot.add(cog); }
+  const cannonGlow = new THREE.Sprite(glowMaterial(0xffaa44)); cannonGlow.scale.set(8, 8, 1); cannonGlow.position.y = CANNON.platformY + 2.5; cannonGroup.add(cannonGlow);
+  const cannonMarker = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.6, 22), new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.7, side: THREE.DoubleSide })); cannonMarker.rotation.x = -Math.PI / 2; cannonMarker.position.y = 0.12; cannonMarker.visible = false; scene.add(cannonMarker);
+  let cannonT = null;
 
   // ---- gameplay trees (server-driven forest) ----
   const treeMeshes = new Map();
@@ -355,9 +405,16 @@ export function createWorld(canvas, opts = {}) {
     const seenOre = new Set();
     for (const oo of s.ironNodes || []) { const [id, x, z] = oo; seenOre.add(id); ensureOre(id, x, z); }
     for (const [id, g] of oreMeshes) if (!seenOre.has(id)) { scene.remove(g); oreMeshes.delete(id); }
+    // builds: rise out of the ground as they're built, sink when destroyed
+    for (const bb of s.builds || []) { const [id, kind, x, z, built, bw, bi, needW, needI] = bb; const g = ensureBuild(id, kind); g.position.set(x, 0, z); const prog = built ? 1 : Math.min(1, ((bw / Math.max(1, needW)) + (bi / Math.max(1, needI))) / 2); if (g.userData.tentMat) g.userData.tentMat.opacity = 0.32 + 0.68 * prog; }
+    // friendly troops: lazy meshes, lerped toward their server position in update()
+    const seenF = new Set();
+    for (const ff of s.friendlies || []) { const [id, x, z] = ff; seenF.add(id); const g = ensureFriendly(id); if (g.position.lengthSq() === 0) g.position.set(x, 0, z); g.userData.tx = x; g.userData.tz = z; }
+    for (const [id, g] of friendlyMeshes) if (!seenF.has(id)) { scene.remove(g); friendlyMeshes.delete(id); }
     gateFrac = (s.gate && s.gate.maxHp) ? s.gate.hp / s.gate.maxHp : 0;
     syncTowers(s.towers || []);
-    if (s.ram) { ramT = s.ram; if (!ram.visible) { ram.visible = true; ram.position.set(s.ram.x, 0, s.ram.z); } } else { ram.visible = false; ramT = null; }
+    if (s.ramSite) { if (ramT === null) ram.position.set(s.ramSite.x, 0, s.ramSite.z); ramT = s.ramSite; ram.visible = true; } else { ram.visible = false; ramT = null; }
+    cannonT = s.cannon || null;
     if (s.fx) for (const f of s.fx) spawnFx(f);
   }
 
@@ -377,7 +434,21 @@ export function createWorld(canvas, opts = {}) {
     cape.rotation.x = 0.18 + Math.sin(performance.now() / 900) * 0.06;
     const so = kingT.vuln ? 0 : 0.4; // shimmer means 'protected behind the gate'
     shieldMesh.material.opacity += (so - shieldMesh.material.opacity) * k; shieldMesh.scale.setScalar(1.1);
-    if (ramT && ram.visible) { ram.position.x += (ramT.x - ram.position.x) * k; ram.position.z += (ramT.z - ram.position.z) * k; ramGlow.visible = true; ramGlow.material.opacity = 0.4 + Math.sin(performance.now() / 200) * 0.2; }
+    if (ramT && ram.visible) { ram.position.x += (ramT.x - ram.position.x) * k; ram.position.z += (ramT.z - ram.position.z) * k;
+      if (ramT.active) { ram.position.y = 0; ramGlow.visible = true; ramGlow.material.opacity = 0.4 + Math.sin(performance.now() / 200) * 0.2; }
+      else { const prog = Math.min(1, ((ramT.bw / Math.max(1, ramT.needW)) + (ramT.bi / Math.max(1, ramT.needI))) / 2); ram.position.y = -4.5 + prog * 4.5; ramGlow.visible = false; } }
+    if (cannonT) {
+      const built = cannonT.built;
+      barrelPivot.visible = !!built;
+      if (built) {
+        barrelPivot.rotation.y += (cannonT.aim - barrelPivot.rotation.y) * k;
+        const pitch = -0.5 + ((cannonT.range - CANNON.rangeMin) / (CANNON.rangeMax - CANNON.rangeMin)) * 0.45;  // longer range -> flatter
+        barrelPivot.rotation.x += (pitch - barrelPivot.rotation.x) * k;
+        const tx = CANNON.x + Math.sin(cannonT.aim) * cannonT.range, tz = CANNON.z - Math.cos(cannonT.aim) * cannonT.range;
+        cannonMarker.position.set(Math.max(-LANE.halfWidth, Math.min(LANE.halfWidth, tx)), 0.12, Math.max(LANE.minZ, tz)); cannonMarker.visible = true;
+        cannonGlow.material.opacity = 0.5;
+      } else { cannonMarker.visible = false; const prog = Math.min(1, (cannonT.bi || 0) / Math.max(1, cannonT.needI)); cannonGlow.material.opacity = 0.3 + prog * 0.4; }
+    }
     gateGroup.visible = gateFrac > 0.001;
     const gd = 1 - gateFrac; gateDoor.material.emissiveIntensity = gd * 0.9;
     gateGroup.position.x = gateFrac > 0 && gateFrac < 1 ? Math.sin(performance.now() / 45) * gd * 0.4 : 0;
@@ -390,10 +461,16 @@ export function createWorld(canvas, opts = {}) {
       rec.bob += dt * 12; if (rec.vis) rec.vis.position.y = moving ? Math.abs(Math.sin(rec.bob)) * 0.32 : rec.vis.position.y * 0.85;
       const tt = rec.dead ? 1 : 0; rec.tilt += (tt - rec.tilt) * (1 - Math.exp(-11 * dt));
       rec.g.rotation.x = rec.tilt * 1.45;          // topple forward when dead
-      rec.g.position.y = -rec.tilt * 0.35;          // sink to the ground
+      let liftTarget = 0;
+      if (cannonT && cannonT.built) { const rx = rec.g.position.x - CANNON.x, rz = rec.g.position.z - CANNON.z;
+        if (rx * rx + rz * rz <= (CANNON.platformR - 0.5) ** 2) liftTarget = CANNON.platformY;                                   // on the platform
+        else if (rx <= -(CANNON.platformR - 0.5) && rx >= -(CANNON.platformR + 6.5) && Math.abs(rz) <= 2.3) liftTarget = Math.max(0, Math.min(1, (rx + CANNON.platformR + 6.5) / 6.5)) * CANNON.platformY; } // walking up the ramp
+      rec.liftY = (rec.liftY || 0) + (liftTarget - (rec.liftY || 0)) * (1 - Math.exp(-12 * dt));
+      rec.g.position.y = rec.liftY - rec.tilt * 0.35;   // stand on platform/ramp height, else ground (sink when dead)
       if (!rec.dead) rec.flung = false;
       if (rec.vis) rec.vis.visible = !(rec.dead && rec.flung);
     }
+    for (const g of friendlyMeshes.values()) { g.position.x += (g.userData.tx - g.position.x) * k; g.position.z += (g.userData.tz - g.position.z) * k; }
     let i = 0;
     for (const st of troopState.values()) {
       if (i >= MAX_TROOPS) break;
@@ -681,8 +758,8 @@ function addCamp(scene) {
   const fl = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2, 7), new THREE.MeshStandardMaterial({ color: 0xff8a2a, emissive: 0xff6a1a, emissiveIntensity: 2 })); fl.position.y = 1.4; fire.add(fl);
   const glow = new THREE.Sprite(glowMaterial(0xff8a33)); glow.scale.set(9, 9, 1); glow.position.y = 1.5; fire.add(glow);
   fire.add(new THREE.PointLight(0xff7a33, 1.0, 32)); scene.add(fire);
-  // --- tents flanking the camp ---
-  for (const tx of [-LANE.halfWidth + 6, LANE.halfWidth - 6, -LANE.halfWidth + 14, LANE.halfWidth - 14]) {
+  // --- decorative tents flanking the camp (the outer two spots are used by the hospital + troop camp) ---
+  for (const tx of [-LANE.halfWidth + 14, LANE.halfWidth - 14]) {
     const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 3.6, 4), Math.random() > 0.5 ? cloth : cloth2); tent.rotation.y = Math.PI / 4; tent.position.set(tx, 1.8, CAMP.z1 - 3 - Math.random() * 3); scene.add(tent);
   }
   // --- supplies ---

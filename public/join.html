@@ -20,6 +20,13 @@
   button { font-size:23px; font-weight:900; padding:18px 30px; border-radius:16px; border:none; color:#1a0f00; background:linear-gradient(90deg,#ffd23f,#ff8a3a); box-shadow:0 10px 28px #ff8a3a66; cursor:pointer; }
   button:active { transform:scale(.97); }
   .foot { position:fixed; bottom:14px; left:0; right:0; z-index:2; text-align:center; font-size:12px; opacity:.55; }
+  .pick { font-size:13px; font-weight:800; letter-spacing:1px; opacity:.85; margin-top:2px; }
+  #classes { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:360px; }
+  .cc { width:104px; padding:9px 7px; border-radius:12px; border:2px solid #ffffff33; background:#00000055; cursor:pointer; text-align:center; transition:transform .08s,border-color .12s; }
+  .cc:active { transform:scale(.96); }
+  .cc.sel { border-color:#ffd23f; background:#ffd23f22; box-shadow:0 0 16px #ffd23f55; }
+  .cc .cn { font-weight:900; font-size:14px; }
+  .cc .cd { font-size:10px; opacity:.72; margin-top:3px; line-height:1.25; }
 </style>
 </head>
 <body>
@@ -30,13 +37,23 @@
   <h1>HUNT FOR<br>JEREMY</h1>
   <p class="tag">Jeremy is the evil King. Grab your weapons, storm the castle, and take him down. You'll respawn — just keep charging!</p>
   <input id="name" placeholder="Enter your hero name" maxlength="16" autocomplete="off">
+  <div class="pick">CHOOSE YOUR CLASS</div>
+  <div id="classes"></div>
   <button id="go">⚔️ STORM THE CASTLE</button>
 </div>
 <div class="foot">A birthday battle • built for the party</div>
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
+import { WEAPONS, WEAPON_ORDER } from './shared.js';
 const $=s=>document.querySelector(s);
+// ---- class picker (each class = a starting weapon) ----
+let selClass = WEAPON_ORDER[0];
+const cbox = $('#classes');
+WEAPON_ORDER.forEach(k=>{ const w=WEAPONS[k]; const c=document.createElement('div'); c.className='cc'+(k===selClass?' sel':''); c.dataset.k=k;
+  c.innerHTML='<div class="cn">'+w.name+'</div><div class="cd">'+w.desc+'</div>';
+  c.onclick=()=>{ selClass=k; cbox.querySelectorAll('.cc').forEach(e=>e.classList.toggle('sel', e.dataset.k===k)); };
+  cbox.appendChild(c); });
 // Live game view behind the join form (lightweight; falls back to plain bg if WebGL is unavailable)
 try {
   const world = createWorld($('#c'), { quality:'low', labels:false });
@@ -57,7 +74,7 @@ try {
 } catch(e) {}
 
 const name = $('#name');
-const go = () => { const n=(name.value||'Hero').trim().slice(0,16)||'Hero'; location.href='/play?name='+encodeURIComponent(n); };
+const go = () => { const n=(name.value||'Hero').trim().slice(0,16)||'Hero'; location.href='/play?name='+encodeURIComponent(n)+'&class='+encodeURIComponent(selClass); };
 $('#go').onclick = go;
 name.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 name.focus();

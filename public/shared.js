@@ -68,18 +68,47 @@ export const WAVE = {
 // ---- Forest economy + battering ram (coordination layer) ----
 // Lumberjacks chop trees in the back for wood; enough wood deploys a ram the
 // crowd pushes to the gate, which SHATTERS the King's shield for a burst window.
-// Side rooms hang off the lane: within this z-window the walkable area bulges out past the walls.
-export const POCKET = { zMin: 40, zMax: 82, outerX: 48 };
-export const FOREST = { xMin: -45, xMax: -31, zMin: 46, zMax: 78, count: 14, regrowMs: 14000 }; // LEFT side room -> WOOD
+// Side rooms hang off the lane beside the BACK CAMP: within this z-window the walkable area bulges out past the walls.
+export const POCKET = { zMin: 78, zMax: 116, outerX: 48 };
+export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 112, count: 14, regrowMs: 14000 }; // LEFT of camp -> WOOD
 export const TREE = { hp: 60, radius: 1.2 };
 export const CHOP = { radius: 3.6, dmg: 20, woodPerTree: 1 };   // FIRE near a tree chops it
-export const IRON = { xMin: 31, xMax: 45, zMin: 46, zMax: 78, count: 12, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 15000 }; // RIGHT side room -> IRON
+export const IRON = { xMin: 32, xMax: 46, zMin: 82, zMax: 112, count: 12, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 15000 }; // RIGHT of camp -> IRON
 export const MINE_DMG = 20;
 export const RAM = {
   woodNeededBase: 8, woodNeededPerPlayer: 0.5, woodNeededMax: 36,
   ironNeededBase: 6, ironNeededPerPlayer: 0.45, ironNeededMax: 30,
   startZ: 80, gateZ: -44, pushRadius: 8, perPusherSpeed: 2.2, maxSpeed: 18, idleDrift: 3,
   knockback: 10, impactDmgFrac: 0.04,
+};
+// How much wood/iron a single player can carry before they must haul it to a build site and dump it.
+export const PACK = { cap: 8 };
+
+// ---- Buildable structures: fixed pads you haul resources to and DUMP into to build (like the ram). ----
+// Each is destructible by the King; destroyed => resets to an empty pad to rebuild.
+// Built IN THE CAMP as permanent base upgrades: persist across rounds, not destructible (safe behind the lines).
+// (The cannon, added separately, is the destructible front-line structure.)
+// Hospital + troop camp sit on the OUTER camp-tent spots; the trebuchet is an OFFENSIVE long-range siege weapon
+// placed safely behind the fence that auto-lobs low-damage shells at the gate.
+export const BUILDS = [
+  { id: 'hospital',  kind: 'hospital',  x: -20, z: 113, needW: 10, needI: 0, hp: 380, r: 5, destructible: false, healR: 16, healPerSec: 16 },
+  { id: 'troopcamp', kind: 'troopcamp', x:  20, z: 113, needW: 8,  needI: 6, hp: 420, r: 5, destructible: false, spawnMs: 6000, capAlive: 8 },
+  { id: 'trebuchet', kind: 'trebuchet', x: -22, z: 88,  needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
+];
+// Friendly troops sent by a built troop camp: march to the gate, chip it weakly, and soak the King's guards.
+export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2.6, radius: 0.8 };
+
+// ---- The CANNON: a destructible front-line emplacement on a raised side platform. ----
+// Built by dumping IRON. Crewed via 3 stations (all the single action button, by where you stand):
+//   traverse cog (left) and elevation cog (right) SWEEP the aim while held (bounce); breech (back) consumes 1 iron and fires.
+// DEFENSIVE anti-unit emplacement: sits safely behind the fence (out of Jeremy's reach); its shells kill TROOPS only.
+export const CANNON = {
+  x: 22, z: 88, platformY: 2.6, platformR: 6, r: 5, needI: 14, hp: 600,   // back-right platform; built by dumping IRON
+  cogDX: 3.2, breechDZ: 3.6, stationR: 2.4,     // traverse cog at x-cogDX, elevation at x+cogDX, breech at z+breechDZ
+  traverseMax: 0.7,                             // aim can swing +/- this many radians off straight-ahead
+  rangeMin: 22, rangeMax: 130,                  // elevation maps to how far down-lane the shell lands
+  traverseSpeed: 0.9, rangeSpeed: 70,           // sweep rates while a cog is being cranked
+  shellDmg: 80, shellSplash: 9, reload: 850,    // each breech shot (consumes 1 iron from the gunner's pack)
 };
 
 // ---- Wizard (Marin) ----
@@ -139,16 +168,28 @@ export const SHOP = {
 export const SHOP_ORDER = ['repair', 'reinforce', 'heal', 'tower', 'guards', 'might', 'swift', 'reach'];
 export const KING_UP_MAX = 5;
 
-// ---- Attacker progression (personal perks, mining, team perks) ----
-// Personal perks: free one-tap pick each intermission, stack over rounds.
+// ---- Attacker progression (the camp Armor & Upgrades shop) ----
+// Bought with personal gold at the camp's left stall; walk up during combat OR intermission.
+// Each upgrade stacks up to PERK_MAX; cost scales with how many you already own.
 export const PERKS = {
-  tough:   { name: 'Tougher',       desc: '+30 max HP' },
+  tough:   { name: 'Armor',         desc: '+30 max HP' },
   dmg:     { name: 'Sharpshooter',  desc: '+15% damage' },
   respawn: { name: 'Quick Respawn', desc: '-1s respawn' },
-  swift:   { name: 'Swift',         desc: '+12% move speed' },
+  swift:   { name: 'Swift Boots',   desc: '+12% move speed' },
 };
 export const PERK_ORDER = ['tough', 'dmg', 'respawn', 'swift'];
 export const PERK_FX = { hp: 30, dmg: 0.15, respawnMs: 1000, speed: 0.12 };
+export const PERK_BUY = { tough: 50, dmg: 70, respawn: 60, swift: 60 }; // base cost; total = base * (owned + 1)
+export const PERK_MAX = 5;
+
+// ---- Class active abilities (one per class/weapon, on a button with a cooldown) ----
+export const ABILITIES = {
+  blaster: { name: 'Dash',          cd: 5000,  kind: 'dash',    dur: 360, speedMult: 2.7 },                 // burst of speed (client-side)
+  shotgun: { name: 'Whirlwind',     cd: 8000,  kind: 'whirl',   radius: 7,  dmg: 75 },                      // spin: clears the troops around you
+  grenade: { name: 'Napalm',        cd: 10000, kind: 'napalm',  range: 12, radius: 8,  dmg: 80 },           // fire blast at your aim (troops + gate)
+  cannon:  { name: 'Piercing Bolt', cd: 7000,  kind: 'pierce',  range: 42, width: 2.4, dmg: 85 },           // line shot skewering everything ahead
+  rocket:  { name: 'Bombard',       cd: 9000,  kind: 'bombard', range: 30, splash: 11, dmg: 130 },          // lob one huge boulder
+};
 
 export function clampToLane(x, z) {
   if (z < LANE.minZ) z = LANE.minZ; else if (z > LANE.maxZ) z = LANE.maxZ = LANE.maxZ;
