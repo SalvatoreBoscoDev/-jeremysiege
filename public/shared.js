@@ -8,6 +8,7 @@ export const LANE = {
   minZ: -54,         // furthest a player can advance (castle wall area)
   maxZ: 158,         // big roomy back camp (rear artillery + room to mingle)
   kingZ: -98,        // King stands here, deep in a roomy rear courtyard behind his wall
+  duelZ: -110,       // once the gate is DOWN, players may charge this far up the hill to duel Jeremy
   wallZ: -46,        // players blocked from z < wallZ until the gates open
   troopSpawnZ: -44,  // troops spawn here and march toward the players (+z)
   playerSpawnZ: 122, // attacker spawn line (deep in the camp, in front of the rear cannon)
@@ -230,8 +231,9 @@ export const TUNE = {
 };
 export const TUNE_ORDER = ['kingHp', 'gateHp', 'waveSize', 'troopDmg', 'playerDmg', 'waveRate'];
 
-export function clampToLane(x, z) {
-  if (z < LANE.minZ) z = LANE.minZ; else if (z > LANE.maxZ) z = LANE.maxZ = LANE.maxZ;
+export function clampToLane(x, z, zMin) {
+  const lo = (zMin != null) ? zMin : LANE.minZ;
+  if (z < lo) z = lo; else if (z > LANE.maxZ) z = LANE.maxZ;
   const lim = (z >= POCKET.zMin && z <= POCKET.zMax) ? POCKET.outerX : LANE.halfWidth; // bulge into the side rooms
   if (x < -lim) x = -lim; else if (x > lim) x = lim;
   return [x, z];

@@ -755,9 +755,11 @@ function bannerMaterial() {
 }
 // Ground height anyone stands on: the flat-topped hill, its front climbing ramp down to the gate, else lane level.
 function terrainY(x, z) {
-  if (Math.hypot(x, z - HILL.z) <= HILL.radius) return HILL.height;     // on the plateau
-  const frontZ = HILL.z + HILL.radius;                                  // mesa front edge
-  if (z > frontZ && z <= LANE.wallZ && Math.abs(x) <= 9) return HILL.height * (1 - (z - frontZ) / (LANE.wallZ - frontZ)); // the 18-wide ramp
+  const dMesa = Math.hypot(x, z - HILL.z);
+  if (dMesa <= HILL.radius) return HILL.height;                                          // plateau top
+  if (dMesa <= HILL.radius + 12) return HILL.height * (1 - (dMesa - HILL.radius) / 12);  // sloped skirt — climbable from any side
+  const frontZ = HILL.z + HILL.radius;
+  if (z > frontZ && z <= LANE.wallZ && Math.abs(x) <= 9) return HILL.height * (1 - (z - frontZ) / (LANE.wallZ - frontZ)); // the front ramp
   return 0;
 }
 function angDiff(target, cur) { let d = (target - cur) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }

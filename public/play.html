@@ -207,8 +207,9 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
       const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1);
       myPos.x+=ix*spd*dt; myPos.z+=iy*spd*dt;
-      [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z);
-      if(lastSnap.gate && lastSnap.gate.hp>0 && myPos.z<LANE.wallZ+3.5) myPos.z=LANE.wallZ+3.5;
+      const gdown = !(lastSnap.gate && lastSnap.gate.hp>0 && !lastSnap.gate.open);   // gate smashed OR Jeremy sallied it open
+      [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z, gdown ? LANE.duelZ : undefined);
+      if(!gdown && myPos.z<LANE.wallZ+3.5) myPos.z=LANE.wallZ+3.5;
       const dx=sx-myPos.x, dz=sz-myPos.z;                        // soft reconcile to server (knockback/clamps)
       if(dx*dx+dz*dz>36){ myPos.x=sx; myPos.z=sz; } else { myPos.x+=dx*0.08; myPos.z+=dz*0.08; }
     }

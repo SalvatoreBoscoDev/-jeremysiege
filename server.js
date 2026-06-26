@@ -177,7 +177,7 @@ function handleMessage(id, ws, m) {
     // Client-authoritative position: the client simulates its own movement and reports it.
     // We trust x/z but still clamp to the lane and in front of a standing gate so nobody
     // can walk through walls / into the castle and break the game (integrity, not anti-cheat).
-    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
+    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz, (!gateUp() && phase === 'combat') ? LANE.duelZ : undefined); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
     case 'fire': playerFire(id); break;
     case 'ability': playerAbility(id); break;
     case 'kmove': { if (clients.get(id)?.role !== 'king') return; king.mx = clamp(+m.mx || 0, -1, 1); king.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') king.a = m.a; break; }
@@ -368,7 +368,9 @@ function resetGame() {
 
 // ---------- tick ----------
 let last = Date.now();
+let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now();
 setInterval(() => {
+  const _hStart = performance.now();
   const t = now(); const dt = Math.min(0.1, (t - last) / 1000); last = t;
   if (wizard) wizard.mana = Math.min(WIZARD.maxMana, wizard.mana + WIZARD.manaRegen * dt);
   const combat = phase === 'combat';
@@ -505,6 +507,8 @@ setInterval(() => {
     towers: towers.map(tw => [tw.x, tw.z]),
     fx: fxQueue.splice(0, fxQueue.length),
   });
+  const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
+  if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }
 }, TICK_MS);
 
 server.listen(PORT, () => {
