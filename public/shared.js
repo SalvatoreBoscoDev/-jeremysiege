@@ -10,7 +10,7 @@ export const LANE = {
   kingZ: -98,        // King stands here, deep in a roomy rear courtyard behind his wall
   wallZ: -46,        // players blocked from z < wallZ until the gates open
   troopSpawnZ: -44,  // troops spawn here and march toward the players (+z)
-  playerSpawnZ: 80,  // attacker spawn line
+  playerSpawnZ: 100, // attacker spawn line (deep in the camp, behind the stalls)
 };
 // Back-compat alias used by a few helpers
 export const ARENA = { castleX: 0, castleZ: LANE.kingZ };
@@ -103,7 +103,7 @@ export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2
 //   traverse cog (left) and elevation cog (right) SWEEP the aim while held (bounce); breech (back) consumes 1 iron and fires.
 // DEFENSIVE anti-unit emplacement: sits safely behind the fence (out of Jeremy's reach); its shells kill TROOPS only.
 export const CANNON = {
-  x: 22, z: 88, platformY: 2.6, platformR: 6, r: 5, needI: 14, hp: 600,   // back-right platform; built by dumping IRON
+  x: 22, z: 64, platformY: 2.6, platformR: 6, r: 5, needI: 14, hp: 600,   // right-flank platform, clear of the camp tents; built by dumping IRON
   cogDX: 3.2, breechDZ: 3.6, stationR: 2.4,     // traverse cog at x-cogDX, elevation at x+cogDX, breech at z+breechDZ
   traverseMax: 0.7,                             // aim can swing +/- this many radians off straight-ahead
   rangeMin: 22, rangeMax: 130,                  // elevation maps to how far down-lane the shell lands
@@ -136,7 +136,7 @@ export const WEAPONS = {
 export const WEAPON_ORDER = ['blaster', 'shotgun', 'grenade', 'cannon', 'rocket'];
 
 // Players' fortified back camp (behind the spawn line). The Armory lets you buy weapons mid-round.
-export const CAMP = { z0: 80, z1: 118, armory: { x: 16, z: 92, r: 7 }, armorer: { x: -16, z: 92, r: 7 } };
+export const CAMP = { z0: 80, z1: 118, armory: { x: 16, z: 92, r: 7 }, armorer: { x: -16, z: 92, r: 7 }, cosmetics: { x: 0, z: 110, r: 7 } };
 // Jeremy stands atop a hill behind the gate; the Wizard fires from a tower beside the castle.
 export const HILL = { z: LANE.kingZ, radius: 40, height: 12 };
 export const WIZ_TOWER = { x: LANE.halfWidth + 18, z: LANE.kingZ + 6, height: 46 };
@@ -182,9 +182,32 @@ export const PERK_FX = { hp: 30, dmg: 0.15, respawnMs: 1000, speed: 0.12 };
 export const PERK_BUY = { tough: 50, dmg: 70, respawn: 60, swift: 60 }; // base cost; total = base * (owned + 1)
 export const PERK_MAX = 5;
 
+// ---- Cosmetics (camp Tailor stall) — pure vanity bought with gold, visible to everyone; owned-forever ----
+export const COSMETICS = {
+  hat: [
+    { id: 'none',   name: 'None',       cost: 0 },
+    { id: 'tophat', name: 'Top Hat',    cost: 40,  color: 0x222222 },
+    { id: 'wizard', name: 'Wizard Hat', cost: 80,  color: 0x4a2a8a },
+    { id: 'horns',  name: 'War Horns',  cost: 90,  color: 0xe8e2d0 },
+    { id: 'crown',  name: 'Gold Crown', cost: 150, color: 0xffd23f },
+  ],
+  cape: [
+    { id: 'none', name: 'None',         cost: 0 },
+    { id: 'red',  name: 'Crimson Cape', cost: 50,  color: 0xb01030 },
+    { id: 'blue', name: 'Royal Cape',   cost: 50,  color: 0x2244aa },
+    { id: 'gold', name: 'Gilded Cape',  cost: 140, color: 0xffcf3a },
+  ],
+  helmet: [
+    { id: 'none',   name: 'None',        cost: 0 },
+    { id: 'knight', name: 'Knight Helm', cost: 70, color: 0xc2c6ce },
+    { id: 'viking', name: 'Viking Helm', cost: 90, color: 0x9aa0aa },
+  ],
+};
+export const COSMETIC_SLOTS = ['hat', 'cape', 'helmet'];
+
 // ---- Class active abilities (one per class/weapon, on a button with a cooldown) ----
 export const ABILITIES = {
-  blaster: { name: 'Dash',          cd: 5000,  kind: 'dash',    dur: 360, speedMult: 2.7 },                 // burst of speed (client-side)
+  blaster: { name: 'Dash',          cd: 5000,  kind: 'dash',    dur: 1000, speedMult: 3.0 },                // long leap (client-side)
   shotgun: { name: 'Whirlwind',     cd: 8000,  kind: 'whirl',   radius: 7,  dmg: 75 },                      // spin: clears the troops around you
   grenade: { name: 'Napalm',        cd: 10000, kind: 'napalm',  range: 12, radius: 8,  dmg: 80 },           // fire blast at your aim (troops + gate)
   cannon:  { name: 'Piercing Bolt', cd: 7000,  kind: 'pierce',  range: 42, width: 2.4, dmg: 85 },           // line shot skewering everything ahead

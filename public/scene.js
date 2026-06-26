@@ -338,14 +338,40 @@ export function createWorld(canvas, opts = {}) {
   const _shadowQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
   const _col = new THREE.Color();
 
+  function buildCosMeshes(cos) {
+    const out = []; const C = cos || {};
+    if (C.hat && C.hat !== 'none') {
+      if (C.hat === 'tophat') { const gg = new THREE.Group(); const brim = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.12, 14), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 })); brim.position.y = 3.95; const top = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.4, 14), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 })); top.position.y = 4.7; gg.add(brim, top); out.push(gg); }
+      else if (C.hat === 'wizard') { const cone = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.1, 14), new THREE.MeshStandardMaterial({ color: 0x4a2a8a, emissive: 0x1a0a3a, emissiveIntensity: 0.4, roughness: 0.6 })); cone.position.y = 4.8; out.push(cone); }
+      else if (C.hat === 'horns') { const m = new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.6 }); for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.2, 8), m); h.position.set(sx * 0.72, 4.3, 0); h.rotation.z = sx * -0.55; out.push(h); } }
+      else if (C.hat === 'crown') { const m = new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.9, roughness: 0.25, emissive: 0x4a3800, emissiveIntensity: 0.4 }); const gg = new THREE.Group(); const band = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.5, 12), m); band.position.y = 4.0; gg.add(band); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 6), m); sp.position.set(Math.cos(a) * 0.82, 4.5, Math.sin(a) * 0.82); gg.add(sp); } out.push(gg); }
+    }
+    if (C.cape && C.cape !== 'none') { const col = { red: 0xb01030, blue: 0x2244aa, gold: 0xffcf3a }[C.cape] || 0x888888; const cape = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.7), new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide, roughness: 0.7 })); cape.position.set(0, 1.85, -0.62); cape.rotation.x = 0.14; out.push(cape); }
+    if (C.helmet && C.helmet !== 'none') {
+      if (C.helmet === 'knight') { const gg = new THREE.Group(); const m = new THREE.MeshStandardMaterial({ color: 0xc2c6ce, metalness: 0.75, roughness: 0.33 }); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.84, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), m); dome.position.y = 3.15; const visor = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.46, 0.32), m); visor.position.set(0, 3.02, 0.66); gg.add(dome, visor); out.push(gg); }
+      else if (C.helmet === 'viking') { const gg = new THREE.Group(); const m = new THREE.MeshStandardMaterial({ color: 0x9aa0aa, metalness: 0.6, roughness: 0.4 }); const dome = new THREE.Mesh(new THREE.SphereGeometry(0.84, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.58), m); dome.position.y = 3.2; gg.add(dome); const hm = new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.6 }); for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.95, 7), hm); h.position.set(sx * 0.86, 3.45, 0); h.rotation.z = sx * -0.95; gg.add(h); } out.push(gg); }
+    }
+    return out;
+  }
+  function applyCos(rec, cos) {
+    if (!rec || !rec.cosGrp) return;
+    while (rec.cosGrp.children.length) rec.cosGrp.remove(rec.cosGrp.children[0]);
+    const helmetOn = cos && cos.helmet && cos.helmet !== 'none';
+    if (rec.helm) rec.helm.visible = !helmetOn;
+    for (const mm of buildCosMeshes(cos)) rec.cosGrp.add(mm);
+  }
   function ensurePlayer(id) {
     if (playerMeshes.has(id)) return playerMeshes.get(id);
     const info = roster.get(id) || { name: '...', color: 0xffffff };
     const g = new THREE.Group();
     const vis = new THREE.Group(); g.add(vis);
     const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color: info.color, roughness: 0.5 })); body.position.y = 1.6; body.castShadow = realShadows; vis.add(body);
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(1.12, 1.5, 12), new THREE.MeshStandardMaterial({ color: info.color, roughness: 0.62 })); skirt.position.y = 1.0; skirt.castShadow = realShadows; vis.add(skirt);
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.3, 12), new THREE.MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.7, metalness: 0.2 })); belt.position.y = 1.5; vis.add(belt);
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.6, roughness: 0.3 })); buckle.position.set(0, 1.5, 0.92); vis.add(buckle);
     const hd = new THREE.Mesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xe6c39a })); hd.position.y = 3.0; hd.castShadow = realShadows; vis.add(hd);
     const helm = new THREE.Mesh(helmGeo, new THREE.MeshStandardMaterial({ color: info.color, metalness: 0.5, roughness: 0.35 })); helm.position.y = 3.55; vis.add(helm);
+    const cosGrp = new THREE.Group(); vis.add(cosGrp);
     if (detail) {
       const tab = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.6, 0.2), new THREE.MeshStandardMaterial({ color: info.color, roughness: 0.6 })); tab.position.set(0, 1.7, 0.82); vis.add(tab);
       const bow = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.09, 6, 12, Math.PI * 1.25), new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.7 })); bow.position.set(0.7, 1.9, 0.6); bow.rotation.y = Math.PI / 2; vis.add(bow);
@@ -357,11 +383,11 @@ export function createWorld(canvas, opts = {}) {
     let label = null; if (labels) { label = makeLabel(info.name, info.color); g.add(label); }
     let hpbar = null; if (labels) { hpbar = makeHpBar(); hpbar.spr.position.y = 5.0; g.add(hpbar.spr); }
     scene.add(g);
-    const rec = { g, vis, body, tx: 0, tz: 0, ta: 0, label, hpbar, hpFrac: -1, flung: false, dead: false, tilt: 0, bob: Math.random() * 6 }; playerMeshes.set(id, rec); return rec;
+    const rec = { g, vis, body, helm, cosGrp, tx: 0, tz: 0, ta: 0, label, hpbar, hpFrac: -1, flung: false, dead: false, tilt: 0, bob: Math.random() * 6 }; applyCos(rec, info.cos); playerMeshes.set(id, rec); return rec;
   }
   function setRoster(list) {
-    roster = new Map(list.map(([id, name, color]) => [id, { name, color }]));
-    for (const [id, rec] of playerMeshes) { const info = roster.get(id); if (info) rec.body.material.color.setHex(info.color); }
+    roster = new Map(list.map(([id, name, color, cos]) => [id, { name, color, cos }]));
+    for (const [id, rec] of playerMeshes) { const info = roster.get(id); if (info) { rec.body.material.color.setHex(info.color); applyCos(rec, info.cos); } }
   }
 
   const _up = new THREE.Vector3(0, 1, 0), _tmpDir = new THREE.Vector3();
@@ -788,4 +814,14 @@ function addCamp(scene) {
   const ring2 = new THREE.Mesh(new THREE.RingGeometry(ar2.r - 0.4, ar2.r, 28), new THREE.MeshBasicMaterial({ color: 0x66ff9a, transparent: true, opacity: 0.35, side: THREE.DoubleSide })); ring2.rotation.x = -Math.PI / 2; ring2.position.y = 0.06; armr.add(ring2);
   armr.add(new THREE.PointLight(0x88ffbb, 0.7, 24));
   scene.add(armr);
+  // --- TAILOR stall (buy cosmetics: hats, capes, helmets) ---
+  const tc = CAMP.cosmetics; const tail = new THREE.Group(); tail.position.set(tc.x, 0, tc.z);
+  const ttent = new THREE.Mesh(new THREE.ConeGeometry(5, 6, 4), new THREE.MeshStandardMaterial({ color: 0x7a3b6b, roughness: 0.85 })); ttent.rotation.y = Math.PI / 4; ttent.position.y = 3; tail.add(ttent);
+  const tpole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 4, 6), new THREE.MeshStandardMaterial({ color: 0x3a2a18 })); tpole.position.set(0, 2, 3.4); tail.add(tpole);
+  const mhead = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), new THREE.MeshStandardMaterial({ color: 0xe6c39a })); mhead.position.set(0, 4.1, 3.4); tail.add(mhead);
+  const mhat = new THREE.Mesh(new THREE.ConeGeometry(0.72, 1.4, 12), new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.6, roughness: 0.3 })); mhat.position.set(0, 4.95, 3.4); tail.add(mhat);
+  const tsign = new THREE.Sprite(glowMaterial(0xff8ad6)); tsign.scale.set(7, 7, 1); tsign.position.set(0, 6.6, 0); tail.add(tsign);
+  const tring = new THREE.Mesh(new THREE.RingGeometry(tc.r - 0.4, tc.r, 28), new THREE.MeshBasicMaterial({ color: 0xff8ad6, transparent: true, opacity: 0.35, side: THREE.DoubleSide })); tring.rotation.x = -Math.PI / 2; tring.position.y = 0.06; tail.add(tring);
+  tail.add(new THREE.PointLight(0xff8ad6, 0.7, 24));
+  scene.add(tail);
 }

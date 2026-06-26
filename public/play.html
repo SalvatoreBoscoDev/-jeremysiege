@@ -23,11 +23,11 @@
   #hpFill { background:linear-gradient(90deg,#33dd55,#aaff33); }
   .stickzone { position:fixed; bottom:0; height:60%; }
   #moveZone { left:0; width:50%; } #aimZone { right:0; width:50%; }
-  .stick { position:absolute; width:116px; height:116px; border-radius:50%; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.25); display:none; }
-  .nub { position:absolute; width:56px; height:56px; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,.6); }
-  #moveNub { background:rgba(120,200,255,.4); } #aimNub { background:rgba(255,120,90,.5); }
-  #moveHint { position:fixed; left:24px; bottom:26px; width:54px; height:54px; border-radius:50%; border:2px solid rgba(255,255,255,.22); background:rgba(120,200,255,.10); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; opacity:.5; pointer-events:none; }
-  #aimHint { position:fixed; right:24px; bottom:26px; width:54px; height:54px; border-radius:50%; border:2px solid rgba(255,255,255,.22); background:rgba(255,120,90,.12); display:flex; align-items:center; justify-content:center; font-size:9px; line-height:1.05; text-align:center; font-weight:800; opacity:.5; pointer-events:none; }
+  .stick { position:fixed; bottom:44px; width:116px; height:116px; border-radius:50%; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.22); pointer-events:none; }
+  #moveStick { left:26px; } #aimStick { right:26px; }
+  .stick .lbl { position:absolute; left:0; right:0; bottom:-17px; text-align:center; font-size:10px; font-weight:800; opacity:.5; text-shadow:0 1px 2px #000; }
+  .nub { position:absolute; width:56px; height:56px; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,.65); transition:left .05s, top .05s; }
+  #moveNub { background:rgba(120,200,255,.45); } #aimNub { background:rgba(255,120,90,.55); }
   #chipChop { position:fixed; left:50%; bottom:166px; transform:translateX(-50%); max-width:90vw; white-space:nowrap; padding:5px 14px; border-radius:10px; background:rgba(0,0,0,.62); text-align:center; font-weight:800; font-size:14px; color:#9be36a; text-shadow:0 1px 4px #000; pointer-events:none; display:none; }
   #abilityBtn { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); width:86px; height:86px; border-radius:50%; background:rgba(0,0,0,.5); border:3px solid #ffd23f; color:#fff; font-weight:900; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; }
   #abilityBtn.ready { border-color:#9be36a; box-shadow:0 0 18px #9be36a66; }
@@ -56,6 +56,11 @@
   #res { position:fixed; top:calc(env(safe-area-inset-top,8px) + 46px); left:12px; display:flex; gap:6px; pointer-events:none; z-index:2; }
   #res .pill { background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:3px 8px; font-size:13px; font-weight:800; text-shadow:0 1px 2px #000; }
   #res .pill.gold { border-color:#ffd23f66; color:#ffd23f; }
+  #cosmetics { position:fixed; left:0; right:0; bottom:232px; display:none; flex-direction:column; align-items:center; gap:5px; padding:0 8px; pointer-events:auto; z-index:7; }
+  #cosmetics .ttl { width:100%; text-align:center; font-weight:900; color:#ff8ad6; font-size:12px; text-shadow:0 1px 3px #000; }
+  #cosmetics .slot { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+  #cosmetics .ci { background:rgba(0,0,0,.55); border:2px solid #ffffff22; border-radius:9px; padding:4px 8px; font-size:11px; font-weight:800; color:#fff; }
+  #cosmetics .ci.on { border-color:#ff8ad6; box-shadow:0 0 8px #ff8ad655; } #cosmetics .ci.owned { border-color:#9be36a; } #cosmetics .ci.poor { opacity:.45; }
   .card.wbuy.owned { border-color:#9be36a; box-shadow:0 0 8px #9be36a55; }
   #armory { position:fixed; left:0; right:0; bottom:232px; display:none; justify-content:center; align-items:flex-end; gap:6px; flex-wrap:wrap; padding:0 8px; pointer-events:auto; z-index:7; }
   #armory .ttl { width:100%; text-align:center; font-weight:900; color:#ffd23f; font-size:12px; text-shadow:0 1px 3px #000; }
@@ -73,12 +78,15 @@
 <div id="weps"></div>
 <div id="myhp"><div class="hl">HP</div><div class="bar"><div id="hpFill" style="width:100%"></div></div></div>
 
-<div id="moveZone" class="stickzone"><div id="moveStick" class="stick"><div id="moveNub" class="nub"></div></div></div>
-<div id="aimZone" class="stickzone"><div id="aimStick" class="stick"><div id="aimNub" class="nub"></div></div></div>
-<div id="moveHint">MOVE</div><div id="aimHint">AIM<br>FIRE</div><div id="chipChop"></div>
+<div id="moveZone" class="stickzone"></div>
+<div id="aimZone" class="stickzone"></div>
+<div id="moveStick" class="stick"><div id="moveNub" class="nub"></div><div class="lbl">MOVE</div></div>
+<div id="aimStick" class="stick"><div id="aimNub" class="nub"></div><div class="lbl">FIRE</div></div>
+<div id="chipChop"></div>
 <div id="abilityBtn"><div class="cdfill"></div><div class="an">—</div><div class="ak">Q</div></div>
 <div id="banner"><span id="bannerTxt"></span></div>
 <div id="armory"></div>
+<div id="cosmetics"></div>
 <div id="respawn"><div class="t">DOWN!</div><div style="font-size:22px;margin-top:8px">Respawning...</div></div>
 
 <div id="join">
@@ -102,6 +110,7 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400)
 
 let myId=null, weapons=null, myWep='blaster', lastSnap=null, facing=Math.PI;
 let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
+let cosmeticsCat=null, cosmeticSlots=[], myCos={hat:'none',cape:'none',helmet:'none'}, myCosOwned=[];
 let myPos=null;   // client-authoritative local position
 let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
 const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
@@ -119,8 +128,8 @@ function useAbility(){
 
 const net = connect({
   open(){ if (preName) doJoin(); },
-  welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); },
-  roster(m){ world.setRoster(m.players); },
+  welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; cosmeticsCat=m.cosmetics; cosmeticSlots=m.cosmeticSlots||[]; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); buildCosmetics(); },
+  roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
   event(ev){
     if(ev.kind==='round') banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f');
@@ -128,6 +137,7 @@ const net = connect({
     else if(ev.kind==='gatebreached') banner('GATE DOWN!', '#ff7adf');
     else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); }
     else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); }
+    else if(ev.kind==='boughtcosmetic'){ myCos[ev.slot]=ev.id; myCosOwned=ev.owned||myCosOwned; if(typeof ev.gold==='number') myGold=ev.gold; refreshCosmetics(); banner('Looking good!','#ff8ad6',800); }
     else if(ev.kind==='gameover') showOver(ev.result);
     else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; refreshShop(); hideOver(); }
   },
@@ -141,17 +151,17 @@ function renderWep(key){ const w=(weapons&&weapons[key])||{name:key,color:0xffff
 // joystick (move)
 let moveId=null, mcx=0, mcy=0, moveX=0, moveY=0;
 const mZone=$('#moveZone'), mStick=$('#moveStick'), mNub=$('#moveNub');
-mZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; moveId=t.identifier; mcx=t.clientX; mcy=t.clientY; mStick.style.display='block'; mStick.style.left=(mcx-58)+'px'; mStick.style.top=(mcy-58)+'px'; mNub.style.left='50%'; mNub.style.top='50%'; $('#moveHint').style.display='none'; e.preventDefault(); },{passive:false});
+mZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; moveId=t.identifier; mcx=t.clientX; mcy=t.clientY; mNub.style.left='50%'; mNub.style.top='50%'; e.preventDefault(); },{passive:false});
 mZone.addEventListener('touchmove', e=>{ for(const t of e.changedTouches){ if(t.identifier!==moveId) continue; let dx=t.clientX-mcx, dy=t.clientY-mcy; const max=46,d=Math.hypot(dx,dy); if(d>max){dx*=max/d;dy*=max/d;} mNub.style.left=(58+dx)+'px'; mNub.style.top=(58+dy)+'px'; moveX=dx/max; moveY=dy/max; } e.preventDefault(); },{passive:false});
-function endMove(e){ for(const t of e.changedTouches) if(t.identifier===moveId){ moveId=null; moveX=0; moveY=0; mStick.style.display='none'; } }
+function endMove(e){ for(const t of e.changedTouches) if(t.identifier===moveId){ moveId=null; moveX=0; moveY=0; mNub.style.left='50%'; mNub.style.top='50%'; } }
 mZone.addEventListener('touchend', endMove); mZone.addEventListener('touchcancel', endMove);
 
 // aim + fire
 let aimId=null, acx=0, acy=0, aimVX=0, aimVY=-1, aiming=false;
 const aZone=$('#aimZone'), aStick=$('#aimStick'), aNub=$('#aimNub');
-aZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; aimId=t.identifier; acx=t.clientX; acy=t.clientY; aiming=true; aStick.style.display='block'; aStick.style.left=(acx-58)+'px'; aStick.style.top=(acy-58)+'px'; aNub.style.left='50%'; aNub.style.top='50%'; $('#aimHint').style.display='none'; e.preventDefault(); },{passive:false});
+aZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; aimId=t.identifier; acx=t.clientX; acy=t.clientY; aiming=true; aNub.style.left='50%'; aNub.style.top='50%'; e.preventDefault(); },{passive:false});
 aZone.addEventListener('touchmove', e=>{ for(const t of e.changedTouches){ if(t.identifier!==aimId) continue; let dx=t.clientX-acx, dy=t.clientY-acy; const max=46,d=Math.hypot(dx,dy); if(d>6){ aimVX=dx/(d||1); aimVY=dy/(d||1); } if(d>max){dx*=max/d;dy*=max/d;} aNub.style.left=(58+dx)+'px'; aNub.style.top=(58+dy)+'px'; } e.preventDefault(); },{passive:false});
-function endAim(e){ for(const t of e.changedTouches) if(t.identifier===aimId){ aimId=null; aiming=false; aStick.style.display='none'; } }
+function endAim(e){ for(const t of e.changedTouches) if(t.identifier===aimId){ aimId=null; aiming=false; aNub.style.left='50%'; aNub.style.top='50%'; } }
 aZone.addEventListener('touchend', endAim); aZone.addEventListener('touchcancel', endAim);
 
 // desktop
@@ -245,6 +255,10 @@ function updateHud(m){
   if(campCfg && (m.phase==='combat'||m.phase==='intermission')){ const ax=myPos?myPos.x:(meP?meP[1]:999), az=myPos?myPos.z:(meP?meP[2]:999); const dx=ax-campCfg.armorer.x, dz=az-campCfg.armorer.z; atArmorer = dx*dx+dz*dz <= (campCfg.armorer.r+1.5)*(campCfg.armorer.r+1.5); }
   $('#inter').style.display = atArmorer ? 'flex' : 'none';
   if(atArmorer) refreshShop();
+  let atTailor=false;
+  if(campCfg && campCfg.cosmetics && (m.phase==='combat'||m.phase==='intermission')){ const ax=myPos?myPos.x:(meP?meP[1]:999), az=myPos?myPos.z:(meP?meP[2]:999); const dx=ax-campCfg.cosmetics.x, dz=az-campCfg.cosmetics.z; atTailor = dx*dx+dz*dz <= (campCfg.cosmetics.r+1.5)*(campCfg.cosmetics.r+1.5); }
+  $('#cosmetics').style.display = atTailor ? 'flex' : 'none';
+  if(atTailor) refreshCosmetics();
 }
 let bT; function banner(txt,color,hold){ const el=$('#bannerTxt'); el.textContent=txt; el.style.color=color||'#fff'; el.style.opacity=1; clearTimeout(bT); bT=setTimeout(()=>el.style.opacity=0, hold||1500); }
 function curRound(){ return lastSnap?lastSnap.round:0; }
@@ -262,6 +276,13 @@ function refreshShop(){ document.querySelectorAll('#perkCards .card.perk').forEa
   c.classList.toggle('owned', maxed); c.classList.toggle('poor', !maxed && myGold<cost); }); }
 function buildArmory(){ if(!wbuy) return; const el=$('#armory'); el.innerHTML='<div class="ttl">ARMORY - buy a weapon</div>';
   (wbuyOrder||[]).forEach(k=>{ const cost=wbuy[k]; const w=weapons[k]||{name:k}; const b=document.createElement('div'); b.className='wb'; b.dataset.k=k; b.dataset.cost=cost; b.textContent=w.name+' '+cost+'g'; b.onclick=()=>{ if(myWep!==k && myGold>=cost) net.send({t:'buyweapon',w:k}); }; el.appendChild(b); }); }
+function buildCosmetics(){ if(!cosmeticsCat||!cosmeticSlots.length) return; const el=$('#cosmetics'); let html='<div class="ttl">TAILOR - spend gold on a look</div>';
+  for(const slot of cosmeticSlots){ html+='<div class="slot">'; for(const it of (cosmeticsCat[slot]||[])){ html+='<div class="ci" data-slot="'+slot+'" data-id="'+it.id+'" data-cost="'+(it.cost||0)+'">'+it.name+(it.cost?(' '+it.cost+'g'):'')+'</div>'; } html+='</div>'; }
+  el.innerHTML=html;
+  el.querySelectorAll('.ci').forEach(c=>{ c.onclick=()=>{ net.send({t:'buycosmetic', slot:c.dataset.slot, id:c.dataset.id}); }; });
+  refreshCosmetics();
+}
+function refreshCosmetics(){ document.querySelectorAll('#cosmetics .ci').forEach(c=>{ const slot=c.dataset.slot, id=c.dataset.id, cost=+c.dataset.cost; const equipped=myCos[slot]===id; const owned=cost===0||myCosOwned.includes(slot+':'+id); c.classList.toggle('on',equipped); c.classList.toggle('owned',owned&&!equipped); c.classList.toggle('poor', !owned && myGold<cost); }); }
 function showOver(res){ const win = res==='attackers'; $('#over').style.display='flex'; $('#over').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')';
   $('#overTxt').textContent = win?'JEREMY HAS FALLEN!':'THE CASTLE HELD'; $('#overTxt').style.color=win?'#aaff66':'#ff8866';
   $('#overSub').textContent = win?'You stormed the castle and took down the King!':'Jeremy survived all the rounds. Better luck next siege!'; }

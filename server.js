@@ -12,6 +12,7 @@ import {
   LANE, POCKET, CAMP, TICK_MS, PLAYER, KING, TROOP, WAVE, WIZARD, FOREST, TREE, CHOP, IRON, MINE_DMG, RAM,
   WEAPONS, WEAPON_ORDER, PLAYER_COLORS, GATE, ROUNDS, GOLD, TOWER, SHOP, KING_UP_MAX, WEAPON_BUY, WEAPON_BUY_ORDER,
   PERKS, PERK_FX, PERK_ORDER, PERK_BUY, PERK_MAX, PACK, BUILDS, FRIENDLY, CANNON, ABILITIES, TUNE, clampToLane,
+  COSMETICS, COSMETIC_SLOTS,
 } from './public/shared.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -150,7 +151,7 @@ initForest(); initIron(); recomputeDefenses();
 function nearestNode(map, x, z, rad) { let best = null, bd = Infinity; for (const n of map.values()) { if (!n.alive) continue; const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd) { bd = d; best = n; } } return best && bd <= rad * rad ? best : null; }
 
 function playerSpawn() { return [(Math.random() - 0.5) * LANE.halfWidth * 1.7, LANE.playerSpawnZ - Math.random() * 8]; }
-function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1 }); recomputeDefenses(); }
+function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server });
@@ -168,7 +169,7 @@ function handleMessage(id, ws, m) {
       clients.set(id, { ws, role, name, color: PLAYER_COLORS[(id - 1) % PLAYER_COLORS.length] });
       if (role === 'player') addPlayer(id, m.class);
       if (role === 'wizard') wizard = { mana: WIZARD.maxMana, cd: { heal: 0, meteor: 0, freeze: 0, rally: 0 }, x: -14, z: LANE.kingZ, a: 0, mx: 0, mz: 0 };
-      send(ws, { t: 'welcome', id, role, lane: LANE, weapons: WEAPONS, weaponOrder: WEAPON_ORDER, king: { radius: KING.radius, attacks: KING.attacks }, wizard: { maxMana: WIZARD.maxMana, spells: WIZARD.spells }, shop: SHOP, roundsTotal, perks: PERKS, perkOrder: PERK_ORDER, perkBuy: PERK_BUY, perkMax: PERK_MAX, weaponBuy: WEAPON_BUY, weaponBuyOrder: WEAPON_BUY_ORDER, camp: CAMP, tune, tuneMeta: TUNE });
+      send(ws, { t: 'welcome', id, role, lane: LANE, weapons: WEAPONS, weaponOrder: WEAPON_ORDER, king: { radius: KING.radius, attacks: KING.attacks }, wizard: { maxMana: WIZARD.maxMana, spells: WIZARD.spells }, shop: SHOP, roundsTotal, perks: PERKS, perkOrder: PERK_ORDER, perkBuy: PERK_BUY, perkMax: PERK_MAX, weaponBuy: WEAPON_BUY, weaponBuyOrder: WEAPON_BUY_ORDER, camp: CAMP, cosmetics: COSMETICS, cosmeticSlots: COSMETIC_SLOTS, tune, tuneMeta: TUNE });
       broadcastRoster();
       break;
     }
@@ -189,6 +190,7 @@ function handleMessage(id, ws, m) {
     // Buy an Armor/upgrade at the camp's left stall with personal gold. Walk-up, combat OR intermission, stacks to PERK_MAX.
     case 'buyperk': { const p = players.get(id); if (!p || !PERK_BUY[m.perk]) break; if (phase !== 'combat' && phase !== 'intermission') break; const near = Math.hypot(p.x - CAMP.armorer.x, p.z - CAMP.armorer.z) <= CAMP.armorer.r + 1.5; if (!near) break; const owned = p.perks[m.perk] || 0; if (owned >= PERK_MAX) break; const cost = PERK_BUY[m.perk] * (owned + 1); if (p.gold < cost) break; p.gold -= cost; p.perks[m.perk] = owned + 1; if (m.perk === 'tough') p.hp = Math.min(effMaxHp(p), p.hp + PERK_FX.hp); send(ws, { t: 'ev', kind: 'boughtperk', perk: m.perk, lvl: owned + 1, cost }); break; }
     case 'buyweapon': { const p = players.get(id); if (!p || !WEAPON_BUY[m.w]) break; const nearArmory = Math.hypot(p.x - CAMP.armory.x, p.z - CAMP.armory.z) <= CAMP.armory.r; if ((phase === 'intermission' || (phase === 'combat' && nearArmory))) { const cost = WEAPON_BUY[m.w]; if (p.gold >= cost && p.wep !== m.w) { p.gold -= cost; p.wep = m.w; send(ws, { t: 'ev', kind: 'boughtweapon', w: m.w }); } } break; }
+    case 'buycosmetic': { const p = players.get(id); if (!p) break; if (phase !== 'combat' && phase !== 'intermission') break; const near = Math.hypot(p.x - CAMP.cosmetics.x, p.z - CAMP.cosmetics.z) <= CAMP.cosmetics.r + 1.5; if (!near) break; const slot = m.slot; if (!COSMETIC_SLOTS.includes(slot)) break; const item = (COSMETICS[slot] || []).find(c => c.id === m.id); if (!item) break; const key = slot + ':' + item.id; const owns = item.cost === 0 || p.cosOwned.includes(key); if (!owns) { if (p.gold < item.cost) break; p.gold -= item.cost; p.cosOwned.push(key); } p.cos[slot] = item.id; broadcastRoster(); send(ws, { t: 'ev', kind: 'boughtcosmetic', slot, id: item.id, owned: p.cosOwned, gold: p.gold }); break; }
     case 'start': if (isDefender(id) && phase === 'lobby') startRound(1); break;
     case 'nextround': if (isDefender(id) && phase === 'intermission') startRound(round + 1); break;
     case 'buy': if (isDefender(id)) buy(m.item); break;
@@ -198,7 +200,7 @@ function handleMessage(id, ws, m) {
 }
 function broadcastRoster() {
   const roster = [];
-  for (const [cid, c] of clients) if (c.role === 'player') roster.push([cid, c.name, c.color]);
+  for (const [cid, c] of clients) if (c.role === 'player') roster.push([cid, c.name, c.color, players.get(cid)?.cos || null]);
   const kingC = [...clients.values()].find(c => c.role === 'king');
   const wizC = [...clients.values()].find(c => c.role === 'wizard');
   broadcast({ t: 'roster', players: roster, kingName: kingC?.name || null, wizardName: wizC?.name || null, count: roster.length });
