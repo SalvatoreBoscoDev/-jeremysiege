@@ -150,7 +150,7 @@ function initIron() { irons.clear(); for (let i = 0; i < IRON.count; i++) { iron
 initForest(); initIron(); recomputeDefenses();
 function nearestNode(map, x, z, rad) { let best = null, bd = Infinity; for (const n of map.values()) { if (!n.alive) continue; const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd) { bd = d; best = n; } } return best && bd <= rad * rad ? best : null; }
 
-function playerSpawn() { return [(Math.random() - 0.5) * LANE.halfWidth * 1.7, LANE.playerSpawnZ - Math.random() * 8]; }
+function playerSpawn() { return [(Math.random() - 0.5) * 16, LANE.playerSpawnZ - Math.random() * 6]; }   // center-back of the camp
 function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
 
 // ---------- networking ----------
@@ -177,7 +177,7 @@ function handleMessage(id, ws, m) {
     // Client-authoritative position: the client simulates its own movement and reports it.
     // We trust x/z but still clamp to the lane and in front of a standing gate so nobody
     // can walk through walls / into the castle and break the game (integrity, not anti-cheat).
-    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
+    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
     case 'fire': playerFire(id); break;
     case 'ability': playerAbility(id); break;
     case 'kmove': { if (clients.get(id)?.role !== 'king') return; king.mx = clamp(+m.mx || 0, -1, 1); king.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') king.a = m.a; break; }
@@ -386,7 +386,7 @@ setInterval(() => {
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer
   // integrates mx/mz for players; it only handles respawn and re-clamps if the gate just dropped.
   for (const p of players.values()) {
-    if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; } continue; }
+    if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = t + 500; } continue; }   // spawnGuard: ignore the client's stale death position for a moment so respawn sticks at the back
     if (up && p.z < LANE.wallZ + 3.5) p.z = LANE.wallZ + 3.5;   // keep attackers in FRONT of a standing gate
   }
 

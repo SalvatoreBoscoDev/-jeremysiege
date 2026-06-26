@@ -120,7 +120,7 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400)
 let myId=null, weapons=null, myWep='blaster', lastSnap=null, facing=Math.PI;
 let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
 let cosmeticsCat=null, cosmeticSlots=[], myCos={hat:'none',cape:'none',helmet:'none'}, myCosOwned=[];
-let myPos=null;   // client-authoritative local position
+let myPos=null, myWasDead=false;   // client-authoritative local position
 let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
 const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
 if (preName) $('#name').value = preName;
@@ -199,8 +199,9 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
   if(me){
     const sx=me[1], sz=me[2], alive=me[6], slowed=me[7];
     if(!myPos) myPos={x:sx,z:sz};
-    if(!alive){ myPos.x=sx; myPos.z=sz; }                       // dead/respawn: follow the server
+    if(!alive){ myPos.x=sx; myPos.z=sz; myWasDead=true; }       // dead: follow the server
     else {
+      if(myWasDead){ myPos.x=sx; myPos.z=sz; myWasDead=false; } // just respawned: snap to the server spawn before predicting/sending
       // CLIENT-AUTHORITATIVE: simulate my own movement locally so input feels instant.
       let ix=moveX, iy=moveY; if(keys['a'])ix=-1; if(keys['d'])ix=1; if(keys['w'])iy=-1; if(keys['s'])iy=1;
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
