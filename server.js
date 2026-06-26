@@ -32,7 +32,14 @@ const server = http.createServer((req, res) => {
   if (!filePath.startsWith(PUBLIC)) { res.writeHead(403); return res.end('no'); }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    const ext = path.extname(filePath);
+    // App code (html/js/json) is never cached, so every deploy is instantly live -- no stale scene.js, no Cloudflare purge.
+    // Big stable third-party assets (vendor libs, images) cache for a day to save phone bandwidth at the party.
+    const stable = filePath.includes(path.join(PUBLIC, 'vendor')) || ['.png', '.ico', '.svg'].includes(ext);
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      'Cache-Control': stable ? 'public, max-age=86400' : 'no-cache, must-revalidate',
+    });
     res.end(data);
   });
 });

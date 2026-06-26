@@ -10,24 +10,26 @@
   #c { position:fixed; inset:0; width:100%; height:100%; touch-action:none; }
   #top { position:fixed; top:env(safe-area-inset-top,8px); left:0; right:0; padding:8px 12px; pointer-events:none; }
   .barwrap { margin:0 auto; max-width:620px; }
-  .label { font-size:12px; font-weight:800; text-shadow:0 1px 2px #000; margin-bottom:2px; }
-  .bar { height:15px; border-radius:8px; background:rgba(0,0,0,.5); overflow:hidden; border:1px solid rgba(255,255,255,.2); }
+  .hdr { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:3px; }
+  .label { font-size:12px; font-weight:800; text-shadow:0 1px 2px #000; }
+  .bar { height:14px; border-radius:8px; background:rgba(0,0,0,.5); overflow:hidden; border:1px solid rgba(255,255,255,.2); }
   .bar>div { height:100%; transition:width .12s; }
-  #roundRow { font-size:12px; font-weight:800; margin-top:3px; text-shadow:0 1px 2px #000; opacity:.9; }
-  #objective { text-align:center; font-weight:800; margin-top:4px; font-size:13px; text-shadow:0 1px 3px #000; }
-  #weps { position:fixed; top:env(safe-area-inset-top,8px); left:0; right:0; margin-top:92px; display:flex; gap:6px; justify-content:center; pointer-events:none; }
-  .wep { padding:5px 11px; border-radius:10px; background:rgba(0,0,0,.5); border:2px solid #ffd23f; font-size:12px; font-weight:800; }
-  #myhp { position:fixed; left:14px; bottom:172px; width:120px; pointer-events:none; }
+  #roundRow { font-size:11px; font-weight:800; text-shadow:0 1px 2px #000; opacity:.85; }
+  #weps { position:fixed; top:calc(env(safe-area-inset-top,8px) + 46px); right:12px; pointer-events:none; z-index:2; }
+  .wep { padding:4px 10px; border-radius:9px; background:rgba(0,0,0,.5); border:2px solid #ffd23f; font-size:12px; font-weight:800; }
+  #myhp { position:fixed; left:50%; transform:translateX(-50%); bottom:126px; width:144px; text-align:center; pointer-events:none; }
+  #myhp .hl { font-size:10px; font-weight:800; opacity:.85; text-shadow:0 1px 2px #000; margin-bottom:2px; }
+  #myhp .bar { height:9px; }
   #hpFill { background:linear-gradient(90deg,#33dd55,#aaff33); }
   .stickzone { position:fixed; bottom:0; height:60%; }
   #moveZone { left:0; width:50%; } #aimZone { right:0; width:50%; }
   .stick { position:absolute; width:116px; height:116px; border-radius:50%; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.25); display:none; }
   .nub { position:absolute; width:56px; height:56px; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,.6); }
   #moveNub { background:rgba(120,200,255,.4); } #aimNub { background:rgba(255,120,90,.5); }
-  #moveHint { position:fixed; left:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
-  #aimHint { position:fixed; right:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
-  #chipChop { position:fixed; right:0; bottom:200px; width:50%; text-align:center; font-weight:900; font-size:20px; color:#9be36a; text-shadow:0 1px 4px #000; pointer-events:none; display:none; }
-  #abilityBtn { position:fixed; bottom:150px; left:50%; transform:translateX(-50%); width:86px; height:86px; border-radius:50%; background:rgba(0,0,0,.5); border:3px solid #ffd23f; color:#fff; font-weight:900; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; }
+  #moveHint { position:fixed; left:24px; bottom:26px; width:54px; height:54px; border-radius:50%; border:2px solid rgba(255,255,255,.22); background:rgba(120,200,255,.10); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; opacity:.5; pointer-events:none; }
+  #aimHint { position:fixed; right:24px; bottom:26px; width:54px; height:54px; border-radius:50%; border:2px solid rgba(255,255,255,.22); background:rgba(255,120,90,.12); display:flex; align-items:center; justify-content:center; font-size:9px; line-height:1.05; text-align:center; font-weight:800; opacity:.5; pointer-events:none; }
+  #chipChop { position:fixed; left:50%; bottom:166px; transform:translateX(-50%); max-width:90vw; white-space:nowrap; padding:5px 14px; border-radius:10px; background:rgba(0,0,0,.62); text-align:center; font-weight:800; font-size:14px; color:#9be36a; text-shadow:0 1px 4px #000; pointer-events:none; display:none; }
+  #abilityBtn { position:fixed; bottom:32px; left:50%; transform:translateX(-50%); width:86px; height:86px; border-radius:50%; background:rgba(0,0,0,.5); border:3px solid #ffd23f; color:#fff; font-weight:900; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; }
   #abilityBtn.ready { border-color:#9be36a; box-shadow:0 0 18px #9be36a66; }
   #abilityBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.62); pointer-events:none; }
   #abilityBtn .an { position:relative; font-size:13px; line-height:1.1; padding:0 4px; } #abilityBtn .ak { position:relative; font-size:10px; opacity:.7; }
@@ -51,7 +53,9 @@
   .card .px { font-size:11px; color:#ffd23f; margin-top:3px; font-weight:800; }
   .card.perk.sel { border-color:#9be36a; } .card.picked { opacity:.4; } .card.tp.sel { border-color:#ffd23f; box-shadow:0 0 10px #ffd23f66; } .card.poor { opacity:.5; } .card.owned { opacity:.5; border-color:#9be36a; }
   #treasury { color:#ffd23f; font-weight:900; }
-  #res { font-size:12px; font-weight:800; margin-top:3px; text-shadow:0 1px 2px #000; }
+  #res { position:fixed; top:calc(env(safe-area-inset-top,8px) + 46px); left:12px; display:flex; gap:6px; pointer-events:none; z-index:2; }
+  #res .pill { background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:3px 8px; font-size:13px; font-weight:800; text-shadow:0 1px 2px #000; }
+  #res .pill.gold { border-color:#ffd23f66; color:#ffd23f; }
   .card.wbuy.owned { border-color:#9be36a; box-shadow:0 0 8px #9be36a55; }
   #armory { position:fixed; left:0; right:0; bottom:232px; display:none; justify-content:center; align-items:flex-end; gap:6px; flex-wrap:wrap; padding:0 8px; pointer-events:auto; z-index:7; }
   #armory .ttl { width:100%; text-align:center; font-weight:900; color:#ffd23f; font-size:12px; text-shadow:0 1px 3px #000; }
@@ -62,18 +66,16 @@
 <body>
 <canvas id="c"></canvas>
 <div id="top"><div class="barwrap">
-  <div class="label" id="barLabel">CASTLE GATE</div>
+  <div class="hdr"><span class="label" id="barLabel">CASTLE GATE</span><span id="roundRow"></span></div>
   <div class="bar"><div id="mainFill" style="width:100%"></div></div>
-  <div id="roundRow"></div>
-  <div id="objective"></div>
-  <div id="res"></div>
 </div></div>
+<div id="res"></div>
 <div id="weps"></div>
-<div id="myhp"><div class="label">HP</div><div class="bar"><div id="hpFill" style="width:100%"></div></div></div>
+<div id="myhp"><div class="hl">HP</div><div class="bar"><div id="hpFill" style="width:100%"></div></div></div>
 
 <div id="moveZone" class="stickzone"><div id="moveStick" class="stick"><div id="moveNub" class="nub"></div></div></div>
 <div id="aimZone" class="stickzone"><div id="aimStick" class="stick"><div id="aimNub" class="nub"></div></div></div>
-<div id="moveHint">MOVE</div><div id="aimHint">AIM & FIRE</div><div id="chipChop">CHOP!</div>
+<div id="moveHint">MOVE</div><div id="aimHint">AIM<br>FIRE</div><div id="chipChop"></div>
 <div id="abilityBtn"><div class="cdfill"></div><div class="an">—</div><div class="ak">Q</div></div>
 <div id="banner"><span id="bannerTxt"></span></div>
 <div id="armory"></div>
@@ -210,10 +212,9 @@ function updateHud(m){
   $('#roundRow').textContent = m.phase==='combat' ? `ROUND ${m.round}/${m.roundsTotal}  -  ${fmtTime(m.timeLeft)}`
     : m.phase==='intermission' ? `INTERMISSION  -  next round in ${Math.ceil(m.timeLeft/1000)}s`
     : m.phase==='lobby' ? 'Waiting for the King to start...' : '';
-  let obj='';
-  if(m.phase==='intermission') obj='<span style="color:#8fe3ff">Camp: LEFT stall = Armor &amp; upgrades · RIGHT stall = Weapons</span>';
-  else if(m.phase==='combat'){ if(gateUp) obj = m.ram ? '<span style="color:#9be36a">PUSH THE RAM into the gate!</span>' : 'Gather WOOD + IRON, haul it to the RAM frame and DUMP to build it'; else obj='<span style="color:#ff7adf">GATE DOWN - KILL JEREMY!</span>'; }
-  $('#objective').innerHTML=obj;
+  let obj='', objCol='#dfe6ff';
+  if(m.phase==='intermission'){ obj='Visit the camp stalls to upgrade'; objCol='#8fe3ff'; }
+  else if(m.phase==='combat'){ if(gateUp){ obj = m.ram ? 'PUSH THE RAM into the gate!' : 'Build the RAM: gather WOOD + IRON'; objCol = m.ram ? '#9be36a' : '#dfe6ff'; } else { obj='GATE DOWN — KILL JEREMY!'; objCol='#ff7adf'; } }
   const me=m.players.find(p=>p[0]===myId);
   if(me){ const [,mxp,mzp,,hp,wep,alive,,maxHp,gold,cw,ci]=me; $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
     if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
@@ -232,13 +233,13 @@ function updateHud(m){
       else if((mxp-(cn.x-CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK AIM'; }
       else if((mxp-(cn.x+CANNON.cogDX))**2+(mzp-cn.z)**2 <= sr){ cannonChip='HOLD — CRANK RANGE'; }
     }
-    const cc=$('#chipChop'); if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; } else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP → BUILD RAM'; cc.style.color='#ffcf33'; } else if(nearBuild){ cc.style.display='block'; cc.textContent='DUMP → BUILD '+nearBuild.toUpperCase(); cc.style.color='#ffcf33'; } else cc.style.display='none';
+    const cc=$('#chipChop'); if(cannonChip){ cc.style.display='block'; cc.textContent=cannonChip; cc.style.color='#ffcf33'; } else if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else if(nearRam){ cc.style.display='block'; cc.textContent='DUMP → BUILD RAM'; cc.style.color='#ffcf33'; } else if(nearBuild){ cc.style.display='block'; cc.textContent='DUMP → BUILD '+nearBuild.toUpperCase(); cc.style.color='#ffcf33'; } else if(obj){ cc.style.display='block'; cc.textContent=obj; cc.style.color=objCol; } else cc.style.display='none';
     const inArmory = (m.phase==='combat'||m.phase==='intermission') && campCfg && ((mxp-campCfg.armory.x)**2+(mzp-campCfg.armory.z)**2 <= (campCfg.armory.r+1)*(campCfg.armory.r+1));
     const ar=$('#armory'); ar.style.display = inArmory?'flex':'none';
     if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
   }
-  { const cw=me?(me[10]||0):0, ci=me?(me[11]||0):0, rs=m.ramSite; const ramTxt = !rs ? '' : (rs.active ? ' &nbsp; <span style="color:#ffcf33">RAM ROLLING</span>' : ` &nbsp; Ram \u{1FAB5}${rs.bw}/${rs.needW} \u26cf\ufe0f${rs.bi}/${rs.needI}`);
-    $('#res').innerHTML = `Pack \u{1FAB5} ${cw} &nbsp; \u26cf\ufe0f ${ci} &nbsp; \u{1F4B0} ${myGold}` + ramTxt; }
+  { const cw=me?(me[10]||0):0, ci=me?(me[11]||0):0;
+    $('#res').innerHTML = `<span class="pill">\u{1FAB5} ${cw}</span><span class="pill">\u26cf\ufe0f ${ci}</span><span class="pill gold">\u{1F4B0} ${myGold}</span>`; }
   const meP = m.players.find(p=>p[0]===myId);
   let atArmorer=false;
   if(campCfg && (m.phase==='combat'||m.phase==='intermission')){ const ax=myPos?myPos.x:(meP?meP[1]:999), az=myPos?myPos.z:(meP?meP[2]:999); const dx=ax-campCfg.armorer.x, dz=az-campCfg.armorer.z; atArmorer = dx*dx+dz*dz <= (campCfg.armorer.r+1.5)*(campCfg.armorer.r+1.5); }
