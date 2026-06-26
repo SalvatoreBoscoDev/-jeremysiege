@@ -128,11 +128,11 @@ export const WIZARD = {
 
 // ---- The 5 attacker weapons ----
 export const WEAPONS = {
-  blaster: { name: 'Shortbow',       dmg: 14, cd: 200,  speed: 65, pellets: 1, splash: 0,  arc: false, color: 0xd8c290, desc: 'Rapid arrows' },
-  shotgun: { name: 'Throwing Axes',  dmg: 13, cd: 600,  speed: 60, pellets: 6, splash: 0,  arc: false, color: 0xc2c6ce, desc: 'Tight spread of axes' },
-  grenade: { name: 'Firebomb',       dmg: 42, cd: 1100, speed: 32, pellets: 1, splash: 6,  arc: true,  color: 0xff7a2a, desc: 'Lobbed fire pot, big splash' },
-  cannon:  { name: 'Heavy Crossbow', dmg: 38, cd: 650,  speed: 50, pellets: 1, splash: 4,  arc: false, color: 0x9aa6b4, desc: 'Piercing bolt' },
-  rocket:  { name: 'Catapult',       dmg: 85, cd: 1700, speed: 42, pellets: 1, splash: 10, arc: false, color: 0x8a7866, desc: 'Hurled boulder, massive splash' },
+  blaster: { name: 'Shortbow',       dmg: 14, cd: 200,  speed: 65, pellets: 1, splash: 0,  arc: false, range: 72, color: 0xd8c290, desc: 'Rapid arrows' },
+  shotgun: { name: 'Throwing Axes',  dmg: 13, cd: 600,  speed: 60, pellets: 6, splash: 0,  arc: false, range: 40, color: 0xc2c6ce, desc: 'Tight spread of axes' },
+  grenade: { name: 'Firebomb',       dmg: 42, cd: 1100, speed: 32, pellets: 1, splash: 6,  arc: true,  range: 50, color: 0xff7a2a, desc: 'Lobbed fire pot, big splash' },
+  cannon:  { name: 'Heavy Crossbow', dmg: 38, cd: 650,  speed: 50, pellets: 1, splash: 4,  arc: false, range: 88, color: 0x9aa6b4, desc: 'Piercing bolt' },
+  rocket:  { name: 'Catapult',       dmg: 85, cd: 1700, speed: 42, pellets: 1, splash: 10, arc: false, range: 58, color: 0x8a7866, desc: 'Hurled boulder, massive splash' },
 };
 export const WEAPON_ORDER = ['blaster', 'shotgun', 'grenade', 'cannon', 'rocket'];
 

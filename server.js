@@ -235,24 +235,24 @@ function buy(item) {
 }
 
 // ---------- combat / gathering ----------
+const GATHER_CD = 250;   // fixed ms between chops/mines/dumps — same for EVERY class, independent of weapon fire rate
 function playerFire(id) {
   const p = players.get(id); if (!p || !p.alive || (phase !== 'combat' && phase !== 'intermission')) return;
   const w = WEAPONS[p.wep]; const t = now();
-  if (t - p.lastShot < w.cd) return; p.lastShot = t;
-  // LEFT forest -> chop wood INTO YOUR PACK
-  const tree = nearestNode(trees, p.x, p.z, CHOP.radius);
-  if (tree) { tree.hp -= CHOP.dmg; fxQueue.push({ k: 'chop', x: tree.x, z: tree.z }); if (tree.hp <= 0) { tree.alive = false; tree.regrowAt = t + FOREST.regrowMs; p.carry.w = Math.min(PACK.cap, p.carry.w + CHOP.woodPerTree); fxQueue.push({ k: 'treefell', x: tree.x, z: tree.z }); } return; }
-  // RIGHT quarry -> mine iron INTO YOUR PACK
-  const orev = nearestNode(irons, p.x, p.z, IRON.radius);
-  if (orev) { orev.hp -= MINE_DMG; fxQueue.push({ k: 'mine', x: orev.x, z: orev.z }); if (orev.hp <= 0) { orev.alive = false; orev.regrowAt = t + IRON.regrowMs; p.carry.i = Math.min(PACK.cap, p.carry.i + IRON.ironPer); fxQueue.push({ k: 'minegold', x: orev.x, z: orev.z }); } return; }
-  // DUMP your pack into the ram frame (build site) when standing on it
-  if (!ram.built && Math.hypot(p.x - ram.x, p.z - ram.z) <= RAM.pushRadius && ((p.carry.w > 0 && ram.bw < woodNeeded()) || (p.carry.i > 0 && ram.bi < ironNeeded()))) { dumpIntoRam(p); return; }
-  // DUMP into a build pad (hospital, troop camp, ...) you're standing on
-  for (const b of builds.values()) { if (!b.built && Math.hypot(p.x - b.x, p.z - b.z) <= b.r + 3 && ((p.carry.w > 0 && b.bw < b.needW) || (p.carry.i > 0 && b.bi < b.needI))) { dumpIntoBuild(p, b); return; } }
-  // (Cannon removed for now.) Gathering + dumping above is allowed during intermission; weapon fire is combat-only.
+  // GATHER / DUMP at a FIXED cadence so a slow weapon (Catapult) mines just as fast as a fast one.
+  if (t - (p.lastGather || 0) >= GATHER_CD) {
+    const tree = nearestNode(trees, p.x, p.z, CHOP.radius);
+    if (tree) { p.lastGather = t; tree.hp -= CHOP.dmg; fxQueue.push({ k: 'chop', x: tree.x, z: tree.z }); if (tree.hp <= 0) { tree.alive = false; tree.regrowAt = t + FOREST.regrowMs; p.carry.w = Math.min(PACK.cap, p.carry.w + CHOP.woodPerTree); fxQueue.push({ k: 'treefell', x: tree.x, z: tree.z }); } return; }
+    const orev = nearestNode(irons, p.x, p.z, IRON.radius);
+    if (orev) { p.lastGather = t; orev.hp -= MINE_DMG; fxQueue.push({ k: 'mine', x: orev.x, z: orev.z }); if (orev.hp <= 0) { orev.alive = false; orev.regrowAt = t + IRON.regrowMs; p.carry.i = Math.min(PACK.cap, p.carry.i + IRON.ironPer); fxQueue.push({ k: 'minegold', x: orev.x, z: orev.z }); } return; }
+    if (!ram.built && Math.hypot(p.x - ram.x, p.z - ram.z) <= RAM.pushRadius && ((p.carry.w > 0 && ram.bw < woodNeeded()) || (p.carry.i > 0 && ram.bi < ironNeeded()))) { p.lastGather = t; dumpIntoRam(p); return; }
+    for (const b of builds.values()) { if (!b.built && Math.hypot(p.x - b.x, p.z - b.z) <= b.r + 3 && ((p.carry.w > 0 && b.bw < b.needW) || (p.carry.i > 0 && b.bi < b.needI))) { p.lastGather = t; dumpIntoBuild(p, b); return; } }
+  }
+  // WEAPON FIRE: combat only, gated by the weapon's own cooldown.
   if (phase !== 'combat') return;
+  if (t - p.lastShot < w.cd) return; p.lastShot = t;
   const dm = dmgMult(p);
-  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
+  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, ox: p.x, oz: p.z, range: w.range || 80, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
   fxQueue.push({ k: 'muzzle', x: p.x, z: p.z, c: w.color });
 }
 function dumpIntoRam(p) {
@@ -415,7 +415,7 @@ setInterval(() => {
     if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
     if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
     if (!done && pr.arc && pr.y <= 0) done = true;
-    if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.minZ - 8 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000)) done = true;
+    if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.minZ - 8 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000 || (pr.range && (pr.x - pr.ox) ** 2 + (pr.z - pr.oz) ** 2 >= pr.range * pr.range))) done = true;
     if (done) {
       if (pr.splash > 0) {
         for (const tr of troops.values()) if (Math.hypot(tr.x - pr.x, tr.z - pr.z) <= pr.splash + TROOP.radius) damageTroop(tr, pr.dmg * 0.6, pr.owner);
