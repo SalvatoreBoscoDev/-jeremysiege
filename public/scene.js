@@ -457,7 +457,7 @@ export function createWorld(canvas, opts = {}) {
     king.position.x += (kingT.x - king.position.x) * k;
     king.position.z += (kingT.z - king.position.z) * k;
     king.rotation.y += angDiff(kingT.a, king.rotation.y) * k;
-    king.position.y = HILL.height; // stand atop the hill
+    king.position.y = terrainY(king.position.x, king.position.z); // follow the ground: hill, ramp down, or lane when he sallies out
     king.visible = !!kingT.alive;
     // Wizard walks the hilltop too
     wiz.position.x += (wizT.x - wiz.position.x) * k;
@@ -500,7 +500,7 @@ export function createWorld(canvas, opts = {}) {
         if (rx * rx + rz * rz <= (CANNON.platformR - 0.5) ** 2) liftTarget = CANNON.platformY;                                   // on the platform
         else if (rx <= -(CANNON.platformR - 0.5) && rx >= -(CANNON.platformR + 6.5) && Math.abs(rz) <= 2.3) liftTarget = Math.max(0, Math.min(1, (rx + CANNON.platformR + 6.5) / 6.5)) * CANNON.platformY; } // walking up the ramp
       rec.liftY = (rec.liftY || 0) + (liftTarget - (rec.liftY || 0)) * (1 - Math.exp(-12 * dt));
-      rec.g.position.y = rec.liftY - rec.tilt * 0.35;   // stand on platform/ramp height, else ground (sink when dead)
+      rec.g.position.y = Math.max(rec.liftY || 0, terrainY(rec.g.position.x, rec.g.position.z)) - rec.tilt * 0.35;   // cannon platform OR the hill ramp, else ground (sink when dead)
       if (!rec.dead) rec.flung = false;
       if (rec.vis) rec.vis.visible = !(rec.dead && rec.flung);
     }
@@ -728,6 +728,13 @@ function bannerMaterial() {
   ctx.fillStyle = '#7a1330'; ctx.fillRect(0, 0, 64, 112); ctx.fillStyle = '#ffd23f'; ctx.fillRect(4, 4, 56, 6); ctx.fillRect(4, 102, 56, 6);
   ctx.beginPath(); ctx.arc(32, 52, 16, 0, 7); ctx.fill(); ctx.fillStyle = '#7a1330'; ctx.beginPath(); ctx.arc(32, 52, 10, 0, 7); ctx.fill();
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.8 });
+}
+// Ground height anyone stands on: the flat-topped hill, its front climbing ramp down to the gate, else lane level.
+function terrainY(x, z) {
+  if (Math.hypot(x, z - HILL.z) <= HILL.radius) return HILL.height;     // on the plateau
+  const frontZ = HILL.z + HILL.radius;                                  // mesa front edge
+  if (z > frontZ && z <= LANE.wallZ && Math.abs(x) <= 9) return HILL.height * (1 - (z - frontZ) / (LANE.wallZ - frontZ)); // the 18-wide ramp
+  return 0;
 }
 function angDiff(target, cur) { let d = (target - cur) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }

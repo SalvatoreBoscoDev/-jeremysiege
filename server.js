@@ -218,6 +218,7 @@ function startRound(n) {
 function endRoundToIntermission() {
   gold += GOLD.perRoundBase + GOLD.perRoundPerPlayer * attackerCount();
   troops.clear(); projectiles = [];
+  king.gateOpen = false; king.x = 0; king.z = LANE.kingZ;   // intermission: pull Jeremy back inside and shut the gate
   if (round >= roundsTotal) { endGame('king'); return; }
   phase = 'intermission'; phaseEndsAt = now() + interMs;
   broadcast({ t: 'ev', kind: 'intermission', round, gold });

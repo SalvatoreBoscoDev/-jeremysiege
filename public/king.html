@@ -86,7 +86,7 @@ const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
 const THREE=world.THREE;
 const camera=new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 600);
-let camX=0, camZ=LANE.kingZ-16; // smoothed chase position
+let camX=0, camZ=LANE.kingZ-16, camY=HILL.height+30; // smoothed chase position
 camera.position.set(0, HILL.height+42, LANE.kingZ-16); camera.lookAt(0, HILL.height-2, LANE.kingZ+55);
 
 let cfg=null, shopCfg=null, lastSnap=null, lastGold=0; const lastCast={cannon:0,slam:0,sweep:0,summon:0};
@@ -137,9 +137,11 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
     world.setKingPos(kpos.x, kpos.z, Math.atan2(aim.x-kpos.x, aim.z-kpos.z));
   }
   const kx=kpos?kpos.x:0; const kz=kpos?kpos.z:LANE.kingZ;
-  camX += (kx*0.5 - camX)*0.07; camZ += ((kz-16) - camZ)*0.07;
-  camera.position.set(camX + Math.sin(now/7000)*1.5, HILL.height+42, camZ);
-  camera.lookAt(kx*0.35, HILL.height-2, kz+55); world.render(camera);
+  const onMesa = Math.hypot(kx, kz-HILL.z) <= HILL.radius; const frontZ = HILL.z+HILL.radius;
+  const ky = onMesa ? HILL.height : (kz>frontZ && kz<=LANE.wallZ ? HILL.height*(1-(kz-frontZ)/(LANE.wallZ-frontZ)) : 0);
+  camX += (kx*0.55 - camX)*0.08; camZ += ((kz-20) - camZ)*0.08; camY += ((ky+30) - camY)*0.08;
+  camera.position.set(camX + Math.sin(now/7000)*1.2, camY, camZ);
+  camera.lookAt(kx*0.6, ky+2, kz+26); world.render(camera);
   if(cfg) document.querySelectorAll('.ab').forEach(ab=>{ const k=ab.dataset.k; ab.querySelector('.cd>div').style.width=Math.min(1,(Date.now()-lastCast[k])/cfg.attacks[k].cd)*100+'%'; });
   requestAnimationFrame(loop);
 }
