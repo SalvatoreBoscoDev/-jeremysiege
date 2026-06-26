@@ -247,12 +247,16 @@ function playerFire(id) {
   const w = WEAPONS[p.wep]; const t = now();
   // GATHER / DUMP at a FIXED cadence so a slow weapon (Catapult) mines just as fast as a fast one.
   if (t - (p.lastGather || 0) >= GATHER_CD) {
-    const tree = nearestNode(trees, p.x, p.z, CHOP.radius);
-    if (tree) { p.lastGather = t; tree.hp -= CHOP.dmg; fxQueue.push({ k: 'chop', x: tree.x, z: tree.z }); if (tree.hp <= 0) { tree.alive = false; tree.regrowAt = t + FOREST.regrowMs; p.carry.w = Math.min(PACK.cap, p.carry.w + CHOP.woodPerTree); fxQueue.push({ k: 'treefell', x: tree.x, z: tree.z }); } return; }
-    const orev = nearestNode(irons, p.x, p.z, IRON.radius);
-    if (orev) { p.lastGather = t; orev.hp -= MINE_DMG; fxQueue.push({ k: 'mine', x: orev.x, z: orev.z }); if (orev.hp <= 0) { orev.alive = false; orev.regrowAt = t + IRON.regrowMs; p.carry.i = Math.min(PACK.cap, p.carry.i + IRON.ironPer); fxQueue.push({ k: 'minegold', x: orev.x, z: orev.z }); } return; }
-    if (!ram.built && Math.hypot(p.x - ram.x, p.z - ram.z) <= RAM.pushRadius && ((p.carry.w > 0 && ram.bw < woodNeeded()) || (p.carry.i > 0 && ram.bi < ironNeeded()))) { p.lastGather = t; dumpIntoRam(p); return; }
-    for (const b of builds.values()) { if (!b.built && Math.hypot(p.x - b.x, p.z - b.z) <= b.r + 3 && ((p.carry.w > 0 && b.bw < b.needW) || (p.carry.i > 0 && b.bi < b.needI))) { p.lastGather = t; dumpIntoBuild(p, b); return; } }
+    // Build sites take PRIORITY over chopping/mining, so standing beside a tree/ore doesn't hijack a dump or treb-fire.
+    let onBuild = false;
+    if (!ram.built && Math.hypot(p.x - ram.x, p.z - ram.z) <= RAM.pushRadius) { onBuild = true; if ((p.carry.w > 0 && ram.bw < woodNeeded()) || (p.carry.i > 0 && ram.bi < ironNeeded())) { p.lastGather = t; dumpIntoRam(p); return; } }
+    for (const b of builds.values()) { if (Math.hypot(p.x - b.x, p.z - b.z) > b.r + 3) continue; onBuild = true; if (!b.built && ((p.carry.w > 0 && b.bw < b.needW) || (p.carry.i > 0 && b.bi < b.needI))) { p.lastGather = t; dumpIntoBuild(p, b); return; } }
+    if (!onBuild) {
+      const tree = nearestNode(trees, p.x, p.z, CHOP.radius);
+      if (tree) { p.lastGather = t; tree.hp -= CHOP.dmg; fxQueue.push({ k: 'chop', x: tree.x, z: tree.z }); if (tree.hp <= 0) { tree.alive = false; tree.regrowAt = t + FOREST.regrowMs; p.carry.w = Math.min(PACK.cap, p.carry.w + CHOP.woodPerTree); fxQueue.push({ k: 'treefell', x: tree.x, z: tree.z }); } return; }
+      const orev = nearestNode(irons, p.x, p.z, IRON.radius);
+      if (orev) { p.lastGather = t; orev.hp -= MINE_DMG; fxQueue.push({ k: 'mine', x: orev.x, z: orev.z }); if (orev.hp <= 0) { orev.alive = false; orev.regrowAt = t + IRON.regrowMs; p.carry.i = Math.min(PACK.cap, p.carry.i + IRON.ironPer); fxQueue.push({ k: 'minegold', x: orev.x, z: orev.z }); } return; }
+    }
   }
   // WEAPON FIRE: combat only, gated by the weapon's own cooldown.
   if (phase !== 'combat') return;

@@ -38,9 +38,9 @@ export const KING = {
   // The courtyard the King may roam (he cannot enter the lane):
   area: { minX: -26, maxX: 26, minZ: LANE.kingZ - 22, maxZ: LANE.kingZ + 22 }, // stays on the hilltop mesa
   attacks: {
-    slam:   { cd: 2500, dmg: 55,  radius: 16, desc: 'Ground Slam (around the King)' },
-    cannon: { cd: 1700, dmg: 45,  radius: 9,  desc: 'Catapult shot (aimed)' },
-    sweep:  { cd: 4500, dmg: 80,  radius: 24, desc: 'Royal Sweep (huge AoE)' },
+    slam:   { cd: 2500, dmg: 55,  radius: 14, desc: 'Ground Slam (around the King)' },
+    cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Catapult shot (aimed)' },
+    sweep:  { cd: 4500, dmg: 80,  radius: 21, desc: 'Royal Sweep (huge AoE)' },
     summon: { cd: 6000, dmg: 0,   radius: 0,  desc: 'Summon a Wave of guards' },
   },
 };
@@ -122,8 +122,8 @@ export const WIZARD = {
   area: { minX: -26, maxX: 30, minZ: LANE.kingZ - 22, maxZ: LANE.kingZ + 22 }, // hilltop mesa
   spells: {
     heal:   { mana: 30, cd: 3000, amount: 6000, desc: 'Heal the King' },
-    meteor: { mana: 35, cd: 2500, dmg: 70, radius: 10, desc: 'Meteor (hits attackers)' },
-    freeze: { mana: 25, cd: 5000, dur: 3000, radius: 14, desc: 'Frost Nova (slow attackers)' },
+    meteor: { mana: 35, cd: 2500, dmg: 70, radius: 9, desc: 'Meteor (hits attackers)' },
+    freeze: { mana: 25, cd: 5000, dur: 3000, radius: 13, desc: 'Frost Nova (slow attackers)' },
     rally:  { mana: 30, cd: 6000, desc: 'Rally (summon a guard squad)' },
   },
 };
