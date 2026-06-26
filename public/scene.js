@@ -110,23 +110,16 @@ export function createWorld(canvas, opts = {}) {
     for (let z = -4; z > -18; z -= 4) { const mer = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.4), stone); mer.position.set(sx * 27, 12.8, z); castle.add(mer); }
   }
 
-  // ---- Jeremy's hill: a flat-topped MESA the King (and Wizard) stand on ----
-  // grassy sloped skirt (wider at the base, flat on top)
-  const mesa = new THREE.Mesh(new THREE.CylinderGeometry(HILL.radius, HILL.radius + 12, HILL.height, 48), new THREE.MeshStandardMaterial({ color: 0x436f3c, roughness: 1, flatShading: true }));
-  mesa.position.set(0, HILL.height / 2, HILL.z); mesa.receiveShadow = realShadows; if (realShadows) mesa.castShadow = true; scene.add(mesa);
-  // flat dirt/grass cap on top so it clearly reads as a plateau
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(HILL.radius - 0.5, HILL.radius - 0.5, 0.6, 48), new THREE.MeshStandardMaterial({ color: 0x4f8244, roughness: 1 }));
-  cap.position.set(0, HILL.height + 0.3, HILL.z); cap.receiveShadow = realShadows; scene.add(cap);
-  // decorative arcane runic ring inlaid on the plateau (purely cosmetic)
-  const runeRing = new THREE.Mesh(new THREE.RingGeometry(HILL.radius - 4.5, HILL.radius - 3.2, 48), new THREE.MeshBasicMaterial({ color: 0x9b5cff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
-  runeRing.rotation.x = -Math.PI / 2; runeRing.position.set(0, HILL.height + 0.62, HILL.z); scene.add(runeRing);
-  // a wide climbing ramp down the lane-facing (front, +z) side, from the mesa edge to the gate
-  const frontZ = HILL.z + HILL.radius;            // front edge of the plateau
-  const rampRun = LANE.wallZ - frontZ;            // horizontal distance out to the gate
-  const rampLen = Math.hypot(rampRun, HILL.height);
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(18, 1.0, rampLen), new THREE.MeshStandardMaterial({ color: 0x6a5236, roughness: 1 }));
-  ramp.position.set(0, HILL.height / 2, (frontZ + LANE.wallZ) / 2);
-  ramp.rotation.x = Math.atan2(HILL.height, rampRun); if (realShadows) ramp.receiveShadow = true; scene.add(ramp);
+  // ---- Jeremy's arena: a flat circular courtyard in the back (level ground — no hill to climb) ----
+  const arenaR = HILL.radius;
+  const arena = new THREE.Mesh(new THREE.CylinderGeometry(arenaR, arenaR, 0.3, 48), new THREE.MeshStandardMaterial({ color: 0x4f8244, roughness: 1 }));
+  arena.position.set(0, 0.12, HILL.z); arena.receiveShadow = realShadows; scene.add(arena);
+  // a raised stone rim so the fighting circle reads clearly from above
+  const arenaRing = new THREE.Mesh(new THREE.TorusGeometry(arenaR, 0.9, 8, 56), new THREE.MeshStandardMaterial({ color: 0x6a6450, roughness: 0.85, flatShading: true }));
+  arenaRing.rotation.x = Math.PI / 2; arenaRing.position.set(0, 0.35, HILL.z); if (realShadows) arenaRing.castShadow = true; scene.add(arenaRing);
+  // decorative arcane runic ring inlaid on the floor (purely cosmetic)
+  const runeRing = new THREE.Mesh(new THREE.RingGeometry(arenaR - 5, arenaR - 3.6, 48), new THREE.MeshBasicMaterial({ color: 0x9b5cff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+  runeRing.rotation.x = -Math.PI / 2; runeRing.position.set(0, 0.3, HILL.z); scene.add(runeRing);
 
   // ---- Wizard's tower (Marin fires from here) ----
   const wtower = new THREE.Group(); wtower.position.set(WIZ_TOWER.x, 0, WIZ_TOWER.z); scene.add(wtower);
@@ -136,11 +129,8 @@ export function createWorld(canvas, opts = {}) {
   const wroof = new THREE.Mesh(new THREE.ConeGeometry(5, 7, 16), new THREE.MeshStandardMaterial({ color: 0x542f7d, roughness: 0.55, metalness: 0.1, flatShading: true })); wroof.position.y = WIZ_TOWER.height + 5; wtower.add(wroof);
   const worb = new THREE.Mesh(new THREE.SphereGeometry(1.3, 14, 14), new THREE.MeshStandardMaterial({ color: 0x9b5cff, emissive: 0x7a33ff, emissiveIntensity: 2 })); worb.position.y = WIZ_TOWER.height + 10; wtower.add(worb);
   const worbGlow = new THREE.Sprite(glowMaterial(0x9b5cff)); worbGlow.scale.set(8, 8, 1); worbGlow.position.y = WIZ_TOWER.height + 10; wtower.add(worbGlow);
-  // ---- back terrace: connects the Wizard's tower to Jeremy's hill (villain meetings) ----
-  const terrace = new THREE.Mesh(new THREE.BoxGeometry(WIZ_TOWER.x + 16, 1.2, 12), new THREE.MeshStandardMaterial({ color: 0x6f6a7d, roughness: 0.9 }));
-  terrace.position.set(WIZ_TOWER.x / 2 - 4, HILL.height, LANE.kingZ - 2); terrace.receiveShadow = realShadows; if (realShadows) terrace.castShadow = true; scene.add(terrace);
-  for (let x = -4; x <= WIZ_TOWER.x + 4; x += 4) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 2, 6), new THREE.MeshStandardMaterial({ color: 0x4a4452 })); post.position.set(x, HILL.height + 1.2, LANE.kingZ - 8); scene.add(post); }
-  // a brazier on the terrace
+  // (the raised villain terrace is gone now that the back is flat — it was the grey slab that z-fought the ground)
+  // a brazier glow by the tower
   const tb = new THREE.PointLight(0x9b5cff, 0.7, 26); tb.position.set(WIZ_TOWER.x / 2, HILL.height + 4, LANE.kingZ - 2); scene.add(tb);
   // ---- the Wizard (Marin) figure, standing on the terrace by the tower ----
   const wiz = new THREE.Group(); wiz.position.set(-14, HILL.height, LANE.kingZ); scene.add(wiz);
@@ -768,14 +758,7 @@ function bannerMaterial() {
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.8 });
 }
 // Ground height anyone stands on: the flat-topped hill, its front climbing ramp down to the gate, else lane level.
-function terrainY(x, z) {
-  const dMesa = Math.hypot(x, z - HILL.z);
-  if (dMesa <= HILL.radius) return HILL.height;                                          // plateau top
-  if (dMesa <= HILL.radius + 12) return HILL.height * (1 - (dMesa - HILL.radius) / 12);  // sloped skirt — climbable from any side
-  const frontZ = HILL.z + HILL.radius;
-  if (z > frontZ && z <= LANE.wallZ && Math.abs(x) <= 9) return HILL.height * (1 - (z - frontZ) / (LANE.wallZ - frontZ)); // the front ramp
-  return 0;
-}
+function terrainY(x, z) { return 0; }   // the back is a flat arena now — ground is level everywhere (cannon platform still lifts via liftY)
 function angDiff(target, cur) { let d = (target - cur) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function gradientTexture(colors) {

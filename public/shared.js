@@ -144,7 +144,7 @@ export const WEAPON_ORDER = ['blaster', 'shotgun', 'grenade', 'cannon', 'rocket'
 // Players' fortified back camp (behind the spawn line). The Armory lets you buy weapons mid-round.
 export const CAMP = { z0: 80, z1: 152, armory: { x: 16, z: 92, r: 7 }, armorer: { x: -16, z: 92, r: 7 }, cosmetics: { x: -22, z: 136, r: 7 } };
 // Jeremy stands atop a hill behind the gate; the Wizard fires from a tower beside the castle.
-export const HILL = { z: LANE.kingZ, radius: 40, height: 12 };
+export const HILL = { z: LANE.kingZ, radius: 40, height: 0 };   // flat circular back arena (no hill — everyone fights on level ground)
 export const WIZ_TOWER = { x: LANE.halfWidth + 18, z: LANE.kingZ + 6, height: 46 };
 
 export const PLAYER_COLORS = [
