@@ -236,7 +236,7 @@ function buy(item) {
 
 // ---------- combat / gathering ----------
 function playerFire(id) {
-  const p = players.get(id); if (!p || !p.alive || phase !== 'combat') return;
+  const p = players.get(id); if (!p || !p.alive || (phase !== 'combat' && phase !== 'intermission')) return;
   const w = WEAPONS[p.wep]; const t = now();
   if (t - p.lastShot < w.cd) return; p.lastShot = t;
   // LEFT forest -> chop wood INTO YOUR PACK
@@ -249,19 +249,10 @@ function playerFire(id) {
   if (!ram.built && Math.hypot(p.x - ram.x, p.z - ram.z) <= RAM.pushRadius && ((p.carry.w > 0 && ram.bw < woodNeeded()) || (p.carry.i > 0 && ram.bi < ironNeeded()))) { dumpIntoRam(p); return; }
   // DUMP into a build pad (hospital, troop camp, ...) you're standing on
   for (const b of builds.values()) { if (!b.built && Math.hypot(p.x - b.x, p.z - b.z) <= b.r + 3 && ((p.carry.w > 0 && b.bw < b.needW) || (p.carry.i > 0 && b.bi < b.needI))) { dumpIntoBuild(p, b); return; } }
-  // CANNON: dump iron to build; once built, crew by where you stand (cogs sweep aim/range, breech fires & eats 1 iron).
-  if (d2(p.x, p.z, CANNON.x, CANNON.z) <= (CANNON.platformR + 2) ** 2) {
-    const tnow = now();
-    if (!cannon.built) {
-      if (p.carry.i > 0 && cannon.bi < cannon.needI) { const ti = Math.min(p.carry.i, cannon.needI - cannon.bi); cannon.bi += ti; p.carry.i -= ti; fxQueue.push({ k: 'minegold', x: CANNON.x, z: CANNON.z }); if (cannon.bi >= cannon.needI) { cannon.built = true; cannon.hp = CANNON.hp; broadcast({ t: 'ev', kind: 'built', what: 'cannon' }); } return; }
-    } else {
-      if (d2(p.x, p.z, CANNON.x, CANNON.z + CANNON.breechDZ) <= CANNON.stationR ** 2) { if (p.carry.i > 0 && tnow - cannon.lastFire >= CANNON.reload) { p.carry.i -= 1; cannon.lastFire = tnow; fireCannon(id); } return; }
-      if (d2(p.x, p.z, CANNON.x - CANNON.cogDX, CANNON.z) <= CANNON.stationR ** 2) { cannon.tUntil = tnow + 250; return; }
-      if (d2(p.x, p.z, CANNON.x + CANNON.cogDX, CANNON.z) <= CANNON.stationR ** 2) { cannon.eUntil = tnow + 250; return; }
-    }
-  }
+  // (Cannon removed for now.) Gathering + dumping above is allowed during intermission; weapon fire is combat-only.
+  if (phase !== 'combat') return;
   const dm = dmgMult(p);
-  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.5 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
+  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
   fxQueue.push({ k: 'muzzle', x: p.x, z: p.z, c: w.color });
 }
 function dumpIntoRam(p) {
@@ -453,7 +444,7 @@ setInterval(() => {
     ramSite: { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1), built: ram.built ? 1 : 0, active: ram.active ? 1 : 0, bw: ram.bw, bi: ram.bi, needW: woodNeeded(), needI: ironNeeded() },
     builds: [...builds.values()].map(b => [b.id, b.kind, b.x, b.z, b.built ? 1 : 0, b.bw, b.bi, b.needW, b.needI, Math.round(b.hp), b.maxHp]),
     friendlies: [...friendlies.values()].map(f => [f.id, +f.x.toFixed(1), +f.z.toFixed(1)]),
-    cannon: { x: CANNON.x, z: CANNON.z, built: cannon.built ? 1 : 0, bi: cannon.bi, needI: cannon.needI, hp: Math.round(cannon.hp), maxHp: CANNON.hp, aim: +cannon.aim.toFixed(3), range: +cannon.range.toFixed(1) },
+    cannon: null,   // cannon removed for now
     towers: towers.map(tw => [tw.x, tw.z]),
     fx: fxQueue.splice(0, fxQueue.length),
   });

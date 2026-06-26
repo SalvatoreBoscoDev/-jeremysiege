@@ -70,10 +70,10 @@ export const WAVE = {
 // crowd pushes to the gate, which SHATTERS the King's shield for a burst window.
 // Side rooms hang off the lane beside the BACK CAMP: within this z-window the walkable area bulges out past the walls.
 export const POCKET = { zMin: 78, zMax: 116, outerX: 48 };
-export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 112, count: 14, regrowMs: 14000 }; // LEFT of camp -> WOOD
+export const FOREST = { xMin: -46, xMax: -32, zMin: 82, zMax: 112, count: 14, regrowMs: 10000 }; // LEFT of camp -> WOOD
 export const TREE = { hp: 60, radius: 1.2 };
 export const CHOP = { radius: 3.6, dmg: 20, woodPerTree: 1 };   // FIRE near a tree chops it
-export const IRON = { xMin: 32, xMax: 46, zMin: 82, zMax: 112, count: 12, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 15000 }; // RIGHT of camp -> IRON
+export const IRON = { xMin: 32, xMax: 46, zMin: 82, zMax: 112, count: 12, hp: 80, radius: 3.6, ironPer: 1, regrowMs: 10000 }; // RIGHT of camp -> IRON
 export const MINE_DMG = 20;
 export const RAM = {
   woodNeededBase: 8, woodNeededPerPlayer: 0.5, woodNeededMax: 36,
@@ -93,7 +93,8 @@ export const PACK = { cap: 8 };
 export const BUILDS = [
   { id: 'hospital',  kind: 'hospital',  x: -20, z: 113, needW: 10, needI: 0, hp: 380, r: 5, destructible: false, healR: 16, healPerSec: 16 },
   { id: 'troopcamp', kind: 'troopcamp', x:  20, z: 113, needW: 8,  needI: 6, hp: 420, r: 5, destructible: false, spawnMs: 6000, capAlive: 8 },
-  { id: 'trebuchet', kind: 'trebuchet', x: -22, z: 88,  needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
+  { id: 'trebuchet',  kind: 'trebuchet', x: -22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
+  { id: 'trebuchet2', kind: 'trebuchet', x:  22, z: 88, needW: 10, needI: 8, hp: 460, r: 5, destructible: false, fireMs: 3000, dmg: 24, splash: 5 },
 ];
 // Friendly troops sent by a built troop camp: march to the gate, chip it weakly, and soak the King's guards.
 export const FRIENDLY = { hp: 55, speed: 6, gateDmg: 4, atkCd: 1000, atkRange: 2.6, radius: 0.8 };
@@ -128,8 +129,8 @@ export const WIZARD = {
 // ---- The 5 attacker weapons ----
 export const WEAPONS = {
   blaster: { name: 'Shortbow',       dmg: 14, cd: 200,  speed: 65, pellets: 1, splash: 0,  arc: false, color: 0xd8c290, desc: 'Rapid arrows' },
-  shotgun: { name: 'Throwing Axes',  dmg: 9,  cd: 750,  speed: 55, pellets: 6, splash: 0,  arc: false, color: 0xc2c6ce, desc: 'Spread of axes' },
-  grenade: { name: 'Firebomb',       dmg: 50, cd: 1100, speed: 32, pellets: 1, splash: 7,  arc: true,  color: 0xff7a2a, desc: 'Lobbed fire pot, big splash' },
+  shotgun: { name: 'Throwing Axes',  dmg: 13, cd: 600,  speed: 60, pellets: 6, splash: 0,  arc: false, color: 0xc2c6ce, desc: 'Tight spread of axes' },
+  grenade: { name: 'Firebomb',       dmg: 42, cd: 1100, speed: 32, pellets: 1, splash: 6,  arc: true,  color: 0xff7a2a, desc: 'Lobbed fire pot, big splash' },
   cannon:  { name: 'Heavy Crossbow', dmg: 38, cd: 650,  speed: 50, pellets: 1, splash: 4,  arc: false, color: 0x9aa6b4, desc: 'Piercing bolt' },
   rocket:  { name: 'Catapult',       dmg: 85, cd: 1700, speed: 42, pellets: 1, splash: 10, arc: false, color: 0x8a7866, desc: 'Hurled boulder, massive splash' },
 };
