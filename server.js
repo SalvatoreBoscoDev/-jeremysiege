@@ -11,7 +11,7 @@ import { WebSocketServer } from 'ws';
 import {
   LANE, POCKET, CAMP, TICK_MS, PLAYER, KING, TROOP, WAVE, WIZARD, FOREST, TREE, CHOP, IRON, MINE_DMG, RAM,
   WEAPONS, WEAPON_ORDER, PLAYER_COLORS, GATE, ROUNDS, GOLD, TOWER, SHOP, KING_UP_MAX, WEAPON_BUY, WEAPON_BUY_ORDER,
-  PERKS, PERK_FX, PERK_ORDER, PERK_BUY, PERK_MAX, PACK, BUILDS, FRIENDLY, CANNON, ABILITIES, clampToLane,
+  PERKS, PERK_FX, PERK_ORDER, PERK_BUY, PERK_MAX, PACK, BUILDS, FRIENDLY, CANNON, ABILITIES, TUNE, clampToLane,
 } from './public/shared.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -116,12 +116,18 @@ let wizard = null;
 const attackerCount = () => players.size;
 const gateUp = () => gate.hp > 0;
 
+// ---- live balance knobs (host dashboard sets these via the 'tune' message) ----
+const tune = { kingHp: 1, gateHp: 1, waveSize: 1, troopDmg: 1, playerDmg: 1, waveRate: 1 };
+function kingBaseHp() { return TEST_HP != null ? TEST_HP : (KING.baseHp + KING.hpPerPlayer * Math.max(1, attackerCount())); }
+function gateBaseHp() { return TEST_GATE != null ? TEST_GATE : (GATE.baseHp + GATE.hpPerPlayer * Math.max(1, attackerCount())); }
 function recomputeDefenses() {
   if (phase !== 'lobby') return;
-  king.maxHp = TEST_HP != null ? TEST_HP : (KING.baseHp + KING.hpPerPlayer * Math.max(1, attackerCount()));
-  king.hp = king.maxHp;
-  gate.maxHp = TEST_GATE != null ? TEST_GATE : (GATE.baseHp + GATE.hpPerPlayer * Math.max(1, attackerCount()));
-  gate.hp = gate.maxHp;
+  king.maxHp = Math.round(kingBaseHp() * tune.kingHp); king.hp = king.maxHp;
+  gate.maxHp = Math.round(gateBaseHp() * tune.gateHp); gate.hp = gate.maxHp;
+}
+function applyTune(k) {   // live-apply HP changes mid-match, preserving the current HP fraction
+  if (k === 'kingHp') { const nm = Math.round(kingBaseHp() * tune.kingHp), f = king.maxHp ? king.hp / king.maxHp : 1; king.maxHp = nm; king.hp = Math.round(nm * f); }
+  else if (k === 'gateHp') { const nm = Math.round(gateBaseHp() * tune.gateHp), f = gate.maxHp ? gate.hp / gate.maxHp : 1; gate.maxHp = nm; gate.hp = Math.round(nm * f); }
 }
 function guardCount() { let n = 0; for (const t of troops.values()) if (t.hp > 0) n++; return n; }
 function woodNeeded() { return TEST_WOOD != null ? TEST_WOOD : clamp(Math.round(RAM.woodNeededBase + RAM.woodNeededPerPlayer * attackerCount()), RAM.woodNeededBase, RAM.woodNeededMax); }
@@ -155,7 +161,7 @@ function handleMessage(id, ws, m) {
       clients.set(id, { ws, role, name, color: PLAYER_COLORS[(id - 1) % PLAYER_COLORS.length] });
       if (role === 'player') addPlayer(id, m.class);
       if (role === 'wizard') wizard = { mana: WIZARD.maxMana, cd: { heal: 0, meteor: 0, freeze: 0, rally: 0 }, x: -14, z: LANE.kingZ, a: 0, mx: 0, mz: 0 };
-      send(ws, { t: 'welcome', id, role, lane: LANE, weapons: WEAPONS, weaponOrder: WEAPON_ORDER, king: { radius: KING.radius, attacks: KING.attacks }, wizard: { maxMana: WIZARD.maxMana, spells: WIZARD.spells }, shop: SHOP, roundsTotal, perks: PERKS, perkOrder: PERK_ORDER, perkBuy: PERK_BUY, perkMax: PERK_MAX, weaponBuy: WEAPON_BUY, weaponBuyOrder: WEAPON_BUY_ORDER, camp: CAMP });
+      send(ws, { t: 'welcome', id, role, lane: LANE, weapons: WEAPONS, weaponOrder: WEAPON_ORDER, king: { radius: KING.radius, attacks: KING.attacks }, wizard: { maxMana: WIZARD.maxMana, spells: WIZARD.spells }, shop: SHOP, roundsTotal, perks: PERKS, perkOrder: PERK_ORDER, perkBuy: PERK_BUY, perkMax: PERK_MAX, weaponBuy: WEAPON_BUY, weaponBuyOrder: WEAPON_BUY_ORDER, camp: CAMP, tune, tuneMeta: TUNE });
       broadcastRoster();
       break;
     }
@@ -180,6 +186,7 @@ function handleMessage(id, ws, m) {
     case 'nextround': if (isDefender(id) && phase === 'intermission') startRound(round + 1); break;
     case 'buy': if (isDefender(id)) buy(m.item); break;
     case 'reset': if (isDefender(id)) resetGame(); break;
+    case 'tune': { if (!isDefender(id)) break; const k = m.key; if (tune[k] === undefined) break; tune[k] = clamp(+m.val || 1, 0.1, 10); applyTune(k); broadcast({ t: 'ev', kind: 'tune', tune }); break; }
   }
 }
 function broadcastRoster() {
@@ -245,7 +252,7 @@ function playerFire(id) {
     }
   }
   const dm = dmgMult(p);
-  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.5 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm }); }
+  for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.5 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
   fxQueue.push({ k: 'muzzle', x: p.x, z: p.z, c: w.color });
 }
 function dumpIntoRam(p) {
@@ -317,7 +324,7 @@ function aoeBuildsFriendlies(x, z, radius, dmg) {
 }
 
 // ---------- troops ----------
-function waveSize() { return clamp(Math.round(attackerCount() * WAVE.perPlayer) + waveBonus + (round - 1), WAVE.minPerWave, WAVE.maxPerWave + 8); }
+function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
 function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
 function spawnWave(n) { if (NO_TROOPS) return; const room = maxAlive() - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12, lastAtk: 0 }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
@@ -343,7 +350,7 @@ setInterval(() => {
   // King / Wizard positions are now CLIENT-AUTHORITATIVE (see 'kpos' / 'wpos' handlers); no server integration.
   for (const tr of trees.values()) if (!tr.alive && t >= tr.regrowAt) { tr.alive = true; tr.hp = TREE.hp; }
   for (const o of irons.values()) if (!o.alive && t >= o.regrowAt) { o.alive = true; o.hp = IRON.hp; }
-  if (combat && t - lastWaveAt > WAVE.intervalMs) { lastWaveAt = t; spawnWave(waveSize()); }
+  if (combat && t - lastWaveAt > WAVE.intervalMs / tune.waveRate) { lastWaveAt = t; spawnWave(waveSize()); }
 
   const up = gateUp();
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer
@@ -361,7 +368,7 @@ setInterval(() => {
     let tx, tz; if (tp) { tx = tp.x; tz = tp.z; } else if (tf) { tx = tf.x; tz = tf.z; } else { tx = tr.x; tz = LANE.playerSpawnZ; }
     const dx = tx - tr.x, dz = tz - tr.z, d = Math.hypot(dx, dz) || 1;
     if (d > TROOP.attackRange) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
-    else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t; if (tp) { damagePlayer(tp, TROOP.dmg); fxQueue.push({ k: 'troophit', x: tp.x, z: tp.z }); } else if (tf) { tf.hp -= TROOP.dmg; if (tf.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tf.x, z: tf.z }); friendlies.delete(tf.id); } } }
+    else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t; if (tp) { damagePlayer(tp, TROOP.dmg * tune.troopDmg); fxQueue.push({ k: 'troophit', x: tp.x, z: tp.z }); } else if (tf) { tf.hp -= TROOP.dmg; if (tf.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tf.x, z: tf.z }); friendlies.delete(tf.id); } } }
   }
 
   // Friendly troops (from a built troop camp): fight nearby enemies, else march to the gate and chip it.

@@ -191,6 +191,17 @@ export const ABILITIES = {
   rocket:  { name: 'Bombard',       cd: 9000,  kind: 'bombard', range: 30, splash: 11, dmg: 130 },          // lob one huge boulder
 };
 
+// ---- Live balance knobs (host dashboard) — multipliers applied at runtime, default 1.0 ----
+export const TUNE = {
+  kingHp:    { label: 'King HP',       min: 0.2, max: 5, step: 0.1 },
+  gateHp:    { label: 'Gate HP',       min: 0.2, max: 5, step: 0.1 },
+  waveSize:  { label: 'Troop Waves',   min: 0.2, max: 4, step: 0.1 },
+  troopDmg:  { label: 'Troop Damage',  min: 0.2, max: 4, step: 0.1 },
+  playerDmg: { label: 'Player Damage', min: 0.2, max: 4, step: 0.1 },
+  waveRate:  { label: 'Wave Speed',    min: 0.5, max: 3, step: 0.1 },
+};
+export const TUNE_ORDER = ['kingHp', 'gateHp', 'waveSize', 'troopDmg', 'playerDmg', 'waveRate'];
+
 export function clampToLane(x, z) {
   if (z < LANE.minZ) z = LANE.minZ; else if (z > LANE.maxZ) z = LANE.maxZ = LANE.maxZ;
   const lim = (z >= POCKET.zMin && z <= POCKET.zMax) ? POCKET.outerX : LANE.halfWidth; // bulge into the side rooms
