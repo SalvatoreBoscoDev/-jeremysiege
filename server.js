@@ -155,7 +155,7 @@ function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_O
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server });
-wss.on('connection', (ws) => { const id = nextId++; ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } handleMessage(id, ws, m); }); ws.on('close', () => removeClient(id)); });
+wss.on('connection', (ws) => { const id = nextId++; try { ws._socket.setNoDelay(true); } catch {}   /* disable Nagle so 22Hz snapshots flush immediately, not in bursts */ ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } handleMessage(id, ws, m); }); ws.on('close', () => removeClient(id)); });
 function removeClient(id) { const c = clients.get(id); clients.delete(id); players.delete(id); if (c && c.role === 'wizard') wizard = null; recomputeDefenses(); broadcastRoster(); }
 const send = (ws, o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
 function broadcast(o) { const s = JSON.stringify(o); for (const c of clients.values()) if (c.ws.readyState === 1) c.ws.send(s); }

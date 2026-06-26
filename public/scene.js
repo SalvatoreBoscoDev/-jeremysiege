@@ -457,7 +457,7 @@ export function createWorld(canvas, opts = {}) {
   }
 
   function update(dt) {
-    const k = 1 - Math.exp(-14 * dt);
+    const k = 1 - Math.exp(-9 * dt);   // gentler smoothing rides out bursty snapshot delivery instead of stepping+snapping
     king.position.x += (kingT.x - king.position.x) * k;
     king.position.z += (kingT.z - king.position.z) * k;
     king.rotation.y += angDiff(kingT.a, king.rotation.y) * k;
