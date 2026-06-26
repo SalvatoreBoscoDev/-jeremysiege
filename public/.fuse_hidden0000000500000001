@@ -1,0 +1,255 @@
+// Shared 3D world: lane battlefield, castle, King, players, troops, effects.
+// Uses per-frame interpolation so the 22Hz network feed renders buttery smooth.
+import * as THREE from './vendor/three.module.js';
+import { LANE, WEAPONS, KING } from './shared.js';
+
+export function createWorld(canvas, opts = {}) {
+  const labels = opts.labels !== false;       // phone view turns labels off for perf
+  const quality = opts.quality || 'high';      // 'low' on phones cuts a few extras
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality !== 'low', powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'low' ? 1.5 : 2));
+
+  const scene = new THREE.Scene();
+  // sky gradient background
+  scene.background = gradientTexture(['#9fd0ff', '#5b76b8', '#241a3a']);
+  scene.fog = new THREE.Fog(0x35305a, 90, 230);
+
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x33264a, 1.0));
+  const sun = new THREE.DirectionalLight(0xfff2d8, 1.5);
+  sun.position.set(30, 80, 60); scene.add(sun);
+  const rim = new THREE.DirectionalLight(0x6a4bff, 0.4); rim.position.set(-40, 30, -60); scene.add(rim);
+
+  // ---- lane ground ----
+  const laneLen = LANE.maxZ - LANE.minZ + 30;
+  const laneW = LANE.halfWidth * 2 + 8;
+  const groundTex = laneTexture();
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping; groundTex.repeat.set(2, 10);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(laneW, laneLen),
+    new THREE.MeshStandardMaterial({ map: groundTex, roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.z = (LANE.maxZ + LANE.minZ) / 2; scene.add(ground);
+  // grass aprons either side
+  const apron = new THREE.Mesh(new THREE.PlaneGeometry(220, laneLen),
+    new THREE.MeshStandardMaterial({ color: 0x294d2c, roughness: 1 }));
+  apron.rotation.x = -Math.PI / 2; apron.position.set(0, -0.06, (LANE.maxZ + LANE.minZ) / 2); scene.add(apron);
+
+  // ---- side walls + torches ----
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x6f6ب7d, roughness: 0.9 });
+  for (const side of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 7, laneLen), new THREE.MeshStandardMaterial({ color: 0x6b6675, roughness: 0.95 }));
+    wall.position.set(side * (LANE.halfWidth + 1.5), 3.5, (LANE.maxZ + LANE.minZ) / 2); scene.add(wall);
+    // crenellations
+    for (let z = LANE.minZ; z < LANE.maxZ; z += 6) {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, 2), wall.material);
+      c.position.set(side * (LANE.halfWidth + 1.5), 7.6, z); scene.add(c);
+    }
+  }
+  // torches (few real lights for perf)
+  const torchFlames = [];
+  const torchZs = [LANE.minZ + 20, LANE.minZ + 55, LANE.minZ + 90, LANE.minZ + 125];
+  for (const tz of torchZs) for (const side of [-1, 1]) {
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0xffaa33, emissive: 0xff7711, emissiveIntensity: 2 }));
+    flame.position.set(side * (LANE.halfWidth + 0.4), 5.5, tz); scene.add(flame);
+    if (quality !== 'low') { const pl = new THREE.PointLight(0xff8822, 0.9, 28); pl.position.copy(flame.position); scene.add(pl); torchFlames.push({ flame, light: pl }); }
+    else torchFlames.push({ flame, light: null });
+  }
+
+  // ---- castle (far end) ----
+  const castle = new THREE.Group(); castle.position.set(0, 0, LANE.kingZ - 4); scene.add(castle);
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8a8f9c, roughness: 0.9 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x7a1f3a, roughness: 0.7 });
+  const gate = new THREE.Mesh(new THREE.BoxGeometry(laneW, 18, 6), stone); gate.position.set(0, 9, -2); castle.add(gate);
+  const arch = new THREE.Mesh(new THREE.BoxGeometry(10, 11, 8), new THREE.MeshStandardMaterial({ color: 0x2a2030 })); arch.position.set(0, 5.5, -1.5); castle.add(arch);
+  for (const sx of [-1, 1]) {
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(5, 5.6, 26, 16), stone);
+    tower.position.set(sx * (LANE.halfWidth - 1), 13, -3); castle.add(tower);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(6.2, 8, 16), roofMat); roof.position.set(sx * (LANE.halfWidth - 1), 30, -3); castle.add(roof);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.4), new THREE.MeshStandardMaterial({ color: 0xffd23f, side: THREE.DoubleSide })); flag.position.set(sx * (LANE.halfWidth - 1), 36, -3); castle.add(flag);
+  }
+
+  // ---- King (Jeremy) ----
+  const king = new THREE.Group(); scene.add(king);
+  const robe = new THREE.Mesh(new THREE.ConeGeometry(5, 12, 14), new THREE.MeshStandardMaterial({ color: 0x3a2150, roughness: 0.5, metalness: 0.2 }));
+  robe.position.y = 6; king.add(robe);
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.4, 5, 12), new THREE.MeshStandardMaterial({ color: 0x5a2f7a, roughness: 0.5 })); torso.position.y = 11; king.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0xe0b48c })); head.position.y = 15; king.add(head);
+  const eMat = new THREE.MeshStandardMaterial({ color: 0xff2200, emissive: 0xff2200, emissiveIntensity: 2.5 });
+  for (const ex of [-0.9, 0.9]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), eMat); e.position.set(ex, 15.2, 1.9); king.add(e); }
+  const crownMat = new THREE.MeshStandardMaterial({ color: 0xffd23f, emissive: 0x5a4400, emissiveIntensity: 0.6, metalness: 0.9, roughness: 0.25 });
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 1.8, 10), crownMat); crown.position.y = 17.4; king.add(crown);
+  for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; const s = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.6, 6), crownMat); s.position.set(Math.cos(a) * 2.2, 18.5, Math.sin(a) * 2.2); king.add(s); }
+  // shield bubble
+  const shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 20, 16),
+    new THREE.MeshStandardMaterial({ color: 0x66ccff, transparent: true, opacity: 0.0, emissive: 0x3399ff, emissiveIntensity: 0.6, side: THREE.DoubleSide }));
+  shieldMesh.position.y = 8; king.add(shieldMesh);
+
+  // ---- dynamic pools ----
+  const playerMeshes = new Map(); // id -> {g, body, tx, tz, ta, label}
+  const projMeshes = new Map();
+  const fxList = [];
+  let roster = new Map();
+  let kingT = { x: 0, z: LANE.kingZ, a: 0, shield: 0, alive: 1 };
+
+  const bodyGeo = new THREE.CapsuleGeometry(0.85, 1.5, 4, 8);
+  const headGeo = new THREE.SphereGeometry(0.7, 10, 10);
+  const helmGeo = new THREE.CylinderGeometry(0.75, 0.8, 0.5, 8);
+  const gunGeo = new THREE.BoxGeometry(0.35, 0.35, 1.8);
+  const shadowGeo = new THREE.CircleGeometry(1.1, 14);
+  const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 });
+
+  // troops via instancing
+  const MAX_TROOPS = 70;
+  const troopGeo = new THREE.CapsuleGeometry(0.7, 1.1, 3, 6);
+  const troopMat = new THREE.MeshStandardMaterial({ color: 0x9c2b2b, roughness: 0.6, emissive: 0x3a0000, emissiveIntensity: 0.5 });
+  const troopInst = new THREE.InstancedMesh(troopGeo, troopMat, MAX_TROOPS); troopInst.count = 0; scene.add(troopInst);
+  const troopShadowInst = new THREE.InstancedMesh(shadowGeo, shadowMat, MAX_TROOPS); troopShadowInst.count = 0; scene.add(troopShadowInst);
+  const troopState = new Map(); // id -> {x,z,tx,tz}
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
+
+  function makeLabel(text, color) {
+    const cv = document.createElement('canvas'); cv.width = 200; cv.height = 52;
+    const ctx = cv.getContext('2d'); ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, 4, 4, 192, 44, 8); ctx.fill();
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0'); ctx.fillText(text, 100, 36);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+    spr.scale.set(5.5, 1.4, 1); spr.position.y = 4.4; return spr;
+  }
+  function ensurePlayer(id) {
+    if (playerMeshes.has(id)) return playerMeshes.get(id);
+    const info = roster.get(id) || { name: '...', color: 0xffffff };
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(bodyGeo, new THREE.MeshStandardMaterial({ color: info.color, roughness: 0.5 })); body.position.y = 1.6; g.add(body);
+    const hd = new THREE.Mesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xe6c39a })); hd.position.y = 3.0; g.add(hd);
+    const helm = new THREE.Mesh(helmGeo, new THREE.MeshStandardMaterial({ color: info.color, metalness: 0.4, roughness: 0.4 })); helm.position.y = 3.5; g.add(helm);
+    const gun = new THREE.Mesh(gunGeo, new THREE.MeshStandardMaterial({ color: 0x222222 })); gun.position.set(0.5, 1.9, 1.0); g.add(gun);
+    const sh = new THREE.Mesh(shadowGeo, shadowMat); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
+    let label = null; if (labels) { label = makeLabel(info.name, info.color); g.add(label); }
+    scene.add(g);
+    const rec = { g, body, tx: 0, tz: 0, ta: 0, label };
+    playerMeshes.set(id, rec); return rec;
+  }
+  function setRoster(list) {
+    roster = new Map(list.map(([id, name, color]) => [id, { name, color }]));
+    for (const [id, rec] of playerMeshes) { const info = roster.get(id); if (info) rec.body.material.color.setHex(info.color); }
+  }
+
+  const projMat = {}; for (const k in WEAPONS) projMat[k] = new THREE.MeshStandardMaterial({ color: WEAPONS[k].color, emissive: WEAPONS[k].color, emissiveIntensity: 1.5 });
+  const projGeo = new THREE.SphereGeometry(0.45, 8, 8);
+
+  function applySnapshot(s) {
+    kingT.x = s.king.x; kingT.z = s.king.z; kingT.a = s.king.a; kingT.shield = s.king.shield || 0; kingT.alive = s.king.alive;
+
+    const seen = new Set();
+    for (const pp of s.players) {
+      const [id, x, z, a, hp, wep, alive, slowed] = pp; seen.add(id);
+      const rec = ensurePlayer(id);
+      if (rec.g.position.lengthSq() === 0) rec.g.position.set(x, 0, z); // first placement
+      rec.tx = x; rec.tz = z; rec.ta = a;
+      rec.g.visible = true;
+      rec.body.material.opacity = alive ? 1 : 0.25; rec.body.material.transparent = !alive;
+      rec.body.material.emissive.setHex(slowed ? 0x2244ff : 0x000000); rec.body.material.emissiveIntensity = slowed ? 0.7 : 0;
+    }
+    for (const [id, rec] of playerMeshes) if (!seen.has(id)) { scene.remove(rec.g); playerMeshes.delete(id); }
+
+    // troops
+    const seenT = new Set();
+    for (const tt of s.troops || []) { const [id, x, z] = tt; seenT.add(id);
+      let st = troopState.get(id); if (!st) { st = { x, z, tx: x, tz: z }; troopState.set(id, st); } st.tx = x; st.tz = z; }
+    for (const id of troopState.keys()) if (!seenT.has(id)) troopState.delete(id);
+
+    // projectiles (snap; they move fast)
+    const seenP = new Set();
+    for (const pr of s.proj) { const [id, x, y, z, wep] = pr; seenP.add(id);
+      let m = projMeshes.get(id); if (!m) { m = new THREE.Mesh(projGeo, projMat[wep] || projMat.blaster); scene.add(m); projMeshes.set(id, m); }
+      m.position.set(x, y, z); }
+    for (const [id, m] of projMeshes) if (!seenP.has(id)) { scene.remove(m); projMeshes.delete(id); }
+
+    if (s.fx) for (const f of s.fx) spawnFx(f);
+  }
+
+  // exponential smoothing toward targets (frame-rate independent)
+  function update(dt) {
+    const k = 1 - Math.exp(-14 * dt);
+    // king
+    king.position.x += (kingT.x - king.position.x) * k;
+    king.position.z += (kingT.z - king.position.z) * k;
+    king.rotation.y += angDiff(kingT.a, king.rotation.y) * k;
+    king.visible = !!kingT.alive;
+    const targetOp = kingT.shield * 0.5; shieldMesh.material.opacity += (targetOp - shieldMesh.material.opacity) * k;
+    shieldMesh.scale.setScalar(0.8 + kingT.shield * 0.5);
+    // players
+    for (const rec of playerMeshes.values()) {
+      rec.g.position.x += (rec.tx - rec.g.position.x) * k;
+      rec.g.position.z += (rec.tz - rec.g.position.z) * k;
+      rec.g.rotation.y += angDiff(rec.ta, rec.g.rotation.y) * k;
+    }
+    // troops -> instanced matrices
+    let i = 0;
+    for (const st of troopState.values()) {
+      if (i >= MAX_TROOPS) break;
+      st.x += (st.tx - st.x) * k; st.z += (st.tz - st.z) * k;
+      _p.set(st.x, 1.3, st.z); _m.compose(_p, _q, _s); troopInst.setMatrixAt(i, _m);
+      _p.set(st.x, 0.04, st.z); _m.compose(_p, _shadowQuat, _s); troopShadowInst.setMatrixAt(i, _m);
+      i++;
+    }
+    troopInst.count = i; troopShadowInst.count = i;
+    troopInst.instanceMatrix.needsUpdate = true; troopShadowInst.instanceMatrix.needsUpdate = true;
+    // torch flicker
+    const f = 0.7 + Math.random() * 0.5;
+    for (const t of torchFlames) { t.flame.material.emissiveIntensity = 1.6 + Math.random() * 0.8; if (t.light) t.light.intensity = f; }
+    updateFx(dt);
+  }
+  const _shadowQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+
+  function spawnFx(f) {
+    if (['boom', 'kingatk', 'meteor', 'freeze', 'rally', 'wave'].includes(f.k)) {
+      const cmap = { boom: f.c || 0xffaa33, kingatk: 0xff5500, meteor: 0xff3300, freeze: 0x55ccff, rally: 0xff66aa, wave: 0xff3344 };
+      const r = f.r || (f.k === 'wave' ? 12 : 6);
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.1, r, 28), new THREE.MeshBasicMaterial({ color: cmap[f.k], transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.position.set(f.x, 0.3, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.6, kind: 'ring' });
+      if (f.k === 'meteor') { const b = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 12), new THREE.MeshStandardMaterial({ color: 0xff5500, emissive: 0xff3300, emissiveIntensity: 2 })); b.position.set(f.x, 40, f.z); scene.add(b); fxList.push({ m: b, life: 0, max: 0.5, kind: 'meteor' }); }
+    } else if (f.k === 'death' || f.k === 'troopdie') {
+      const col = f.k === 'troopdie' ? 0xaa3322 : 0xff5555;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(f.k === 'troopdie' ? 1 : 1.5, 8, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85 }));
+      m.position.set(f.x, 1.5, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.45, kind: 'puff' });
+    } else if (f.k === 'heal') {
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 9, 24), new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.position.set(f.x, 0.5, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.8, kind: 'ring' });
+    } else if (f.k === 'troophit') {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.6, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffdd55, transparent: true, opacity: 0.9 }));
+      m.position.set(f.x, 2, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.25, kind: 'puff' });
+    }
+  }
+  function updateFx(dt) {
+    for (let i = fxList.length - 1; i >= 0; i--) {
+      const fx = fxList[i]; fx.life += dt; const t = fx.life / fx.max;
+      if (fx.kind === 'ring') { fx.m.scale.setScalar(0.2 + t); fx.m.material.opacity = 0.85 * (1 - t); }
+      else if (fx.kind === 'puff') { fx.m.scale.setScalar(1 + t * 2); fx.m.material.opacity = 0.85 * (1 - t); }
+      else if (fx.kind === 'meteor') { fx.m.position.y = 40 * (1 - t); }
+      if (fx.life >= fx.max) { scene.remove(fx.m); fxList.splice(i, 1); }
+    }
+  }
+  function resize(w, h, camera) { renderer.setSize(w, h, false); if (camera) { camera.aspect = w / h; camera.updateProjectionMatrix(); } }
+
+  return { THREE, scene, renderer, king, castle, playerMeshes, setRoster, applySnapshot, update, updateFx, resize,
+    getPlayerMesh: (id) => playerMeshes.get(id), render: (cam) => renderer.render(scene, cam) };
+}
+
+// ---- helpers ----
+function angDiff(target, cur) { let d = (target - cur) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
+function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function gradientTexture(colors) {
+  const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256; const ctx = cv.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256); colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 256); const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
+function laneTexture() {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#3a6b3e'; ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 400; i++) { ctx.fillStyle = Math.random() > 0.5 ? '#356439' : '#427a47'; const s = 2 + Math.random() * 4; ctx.fillRect(Math.random() * 256, Math.random() * 256, s, s); }
+  // central dirt path
+  ctx.fillStyle = '#7a5a39'; ctx.fillRect(78, 0, 100, 256);
+  for (let i = 0; i < 300; i++) { ctx.fillStyle = Math.random() > 0.5 ? '#6e4f31' : '#8a6a45'; const s = 2 + Math.random() * 5; ctx.fillRect(78 + Math.random() * 100, Math.random() * 256, s, s); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}

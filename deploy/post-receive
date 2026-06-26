@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Auto-deploy: checkout the pushed code, install deps, restart the service.
+set -e
+APP=/opt/hunt-for-jeremy
+GIT_DIR=/opt/hunt-for-jeremy.git
+BRANCH=main
+echo ""
+echo "  >> Deploying Hunt for Jeremy ..."
+mkdir -p "$APP"
+git --work-tree="$APP" --git-dir="$GIT_DIR" checkout -f "$BRANCH"
+cd "$APP"
+npm install --omit=dev --no-audit --no-fund
+sudo /usr/bin/systemctl restart hunt-for-jeremy
+echo "  >> Done. Live again in a second."
+echo ""

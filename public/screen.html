@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hunt for Jeremy — Big Screen</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+  html,body { height:100%; overflow:hidden; background:#070910; font-family:system-ui,sans-serif; color:#fff; }
+  #c { position:fixed; inset:0; width:100%; height:100%; }
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #title { position:absolute; top:18px; left:50%; transform:translateX(-50%); text-align:center; }
+  #title h1 { font-size:34px; font-weight:900; letter-spacing:2px; background:linear-gradient(90deg,#ffd23f,#ff5e3a); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 2px 12px #0006; }
+  #hpwrap { position:absolute; top:78px; left:50%; transform:translateX(-50%); width:min(900px,70vw); }
+  .bar { height:30px; border-radius:15px; background:rgba(0,0,0,.55); border:3px solid #fff3; overflow:hidden; }
+  #hpfill { height:100%; background:linear-gradient(90deg,#ff2a4d,#ff7a2a); transition:width .15s; }
+  #hptext { text-align:center; font-weight:800; font-size:18px; margin-top:6px; text-shadow:0 1px 4px #000; }
+  #qrcard { position:absolute; right:26px; bottom:26px; background:rgba(255,255,255,.96); color:#1a1030; border-radius:18px; padding:18px; text-align:center; box-shadow:0 12px 40px #000a; }
+  #qrcard #qr { width:200px; height:200px; image-rendering:pixelated; }
+  #qrcard .j { font-weight:900; font-size:16px; margin-bottom:8px; color:#5a2b8a; }
+  #qrcard .u { font-weight:800; font-size:18px; margin-top:8px; color:#1a1030; }
+  #qrcard .h { font-size:12px; opacity:.7; margin-top:2px; }
+  #count { position:absolute; left:26px; bottom:26px; background:rgba(0,0,0,.5); border-radius:14px; padding:14px 20px; font-size:20px; font-weight:900; line-height:1.5; }
+  #feed { position:absolute; left:26px; top:150px; width:280px; font-size:16px; }
+  #feed div { background:rgba(0,0,0,.4); padding:5px 10px; border-radius:8px; margin-bottom:5px; }
+  #big { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:radial-gradient(circle at 50% 40%,#1d3a1dcc,#0a0e0aee); z-index:5; }
+  #big h1 { font-size:72px; color:#aaff66; text-shadow:0 3px 16px #000; } #big p { font-size:26px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="title"><h1>HUNT FOR JEREMY</h1></div>
+  <div id="hpwrap"><div class="bar"><div id="hpfill" style="width:100%"></div></div><div id="hptext">King Jeremy</div></div>
+  <div id="count">0 attackers<br>0 guards</div>
+  <div id="feed"></div>
+  <div id="qrcard"><div class="j">SCAN TO JOIN</div><img id="qr" alt="join QR"><div class="u" id="url">...</div><div class="h">or type it into any phone browser</div></div>
+</div>
+<div id="big"><h1 id="bigh">JEREMY HAS FALLEN!</h1><p id="bigsub"></p></div>
+
+<script src="./vendor/qrcode.js"></script>
+<script type="module">
+import { createWorld } from './scene.js';
+import { connect } from './net.js';
+const $=s=>document.querySelector(s);
+const world=createWorld($('#c'), { quality:'high' });
+const THREE=world.THREE;
+const camera=new THREE.PerspectiveCamera(56, innerWidth/innerHeight, 0.1, 700);
+
+const joinUrl=location.origin+'/'; $('#url').textContent=joinUrl.replace(/^https?:\/\//,'');
+try { const qr=qrcode(0,'M'); qr.addData(joinUrl); qr.make(); $('#qr').src=qr.createDataURL(6,8); } catch(e){}
+
+const net=connect({
+  roster(m){ world.setRoster(m.players); window._att=m.count; },
+  snapshot(m){ world.applySnapshot(m); updateHud(m); },
+  event(ev){
+    if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866'; $('#bigsub').textContent=win?'The horde stormed the castle!':'Jeremy survived every round.'; $('#big').style.display='flex'; }
+    else if(ev.kind==='reset') $('#big').style.display='none';
+    else if(ev.kind==='round') addFeed('ROUND '+ev.round+' / '+ev.total); else if(ev.kind==='intermission') addFeed('Intermission - shopping');
+    else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='ramhit') addFeed('RAM SMASHES THE GATE!');
+    else if(ev.kind==='death') addFeed('Crushed: '+ev.name); else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
+    else if(ev.kind==='ramdeploy') addFeed('BATTERING RAM DEPLOYED!'); },
+});
+net.join('screen','TV');
+
+let lastT=performance.now();
+function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
+  const a=now/16000; camera.position.set(Math.sin(a)*40, 60, 76); camera.lookAt(Math.sin(a)*10, 6, -30);
+  world.render(camera); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+function fmt(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'); }
+function updateHud(m){
+  const gateUp = m.gate && m.gate.hp>0;
+  const frac = gateUp ? (m.gate.maxHp?m.gate.hp/m.gate.maxHp:0) : (m.king.maxHp?m.king.hp/m.king.maxHp:0);
+  $('#hpfill').style.width=Math.max(0,frac*100)+'%';
+  $('#hpfill').style.background = gateUp?'linear-gradient(90deg,#b98a3a,#e8cf6a)':'linear-gradient(90deg,#ff2a4d,#ff7a2a)';
+  const phaseTxt = m.phase==='combat'?`ROUND ${m.round}/${m.roundsTotal} - ${fmt(m.timeLeft)}`:m.phase==='intermission'?`INTERMISSION - ${Math.ceil(m.timeLeft/1000)}s`:m.phase==='lobby'?'waiting to start':'';
+  $('#hptext').textContent=(gateUp?`CASTLE GATE  ${Math.round(m.gate.hp)}/${Math.round(m.gate.maxHp)}`:`KING JEREMY  ${m.king.hp}/${m.king.maxHp}`)+'   -   '+phaseTxt;
+  const ramLine = m.ram?'<span style="color:#ffcf33">RAM ROLLING IN!</span>':'building ram';
+  $('#count').innerHTML=`${window._att||0} attackers · ${m.king.guards||0} guards<br>Castle ${(m.gold||0)}g · ${(m.towers||[]).length} towers<br>${ramLine} &nbsp;|&nbsp; \u{1FAB5} ${m.wood||0}/${m.woodNeeded||0} \u26cf\ufe0f ${m.iron||0}/${m.ironNeeded||0}`; }
+const feed=$('#feed'); const items=[]; function addFeed(t){ items.unshift(t); items.length=Math.min(10,items.length); feed.innerHTML=items.map(x=>`<div>${x}</div>`).join(''); }
+addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera)); world.resize(innerWidth,innerHeight,camera);
+</script>
+</body>
+</html>

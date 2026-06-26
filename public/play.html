@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Hunt for Jeremy</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { height:100%; overflow:hidden; background:#10131c; font-family:system-ui,sans-serif; color:#fff; }
+  #c { position:fixed; inset:0; width:100%; height:100%; touch-action:none; }
+  #top { position:fixed; top:env(safe-area-inset-top,8px); left:0; right:0; padding:8px 12px; pointer-events:none; }
+  .barwrap { margin:0 auto; max-width:620px; }
+  .label { font-size:12px; font-weight:800; text-shadow:0 1px 2px #000; margin-bottom:2px; }
+  .bar { height:15px; border-radius:8px; background:rgba(0,0,0,.5); overflow:hidden; border:1px solid rgba(255,255,255,.2); }
+  .bar>div { height:100%; transition:width .12s; }
+  #roundRow { font-size:12px; font-weight:800; margin-top:3px; text-shadow:0 1px 2px #000; opacity:.9; }
+  #objective { text-align:center; font-weight:800; margin-top:4px; font-size:13px; text-shadow:0 1px 3px #000; }
+  #weps { position:fixed; top:env(safe-area-inset-top,8px); left:0; right:0; margin-top:92px; display:flex; gap:6px; justify-content:center; pointer-events:none; }
+  .wep { padding:5px 11px; border-radius:10px; background:rgba(0,0,0,.5); border:2px solid #ffd23f; font-size:12px; font-weight:800; }
+  #myhp { position:fixed; left:14px; bottom:172px; width:120px; pointer-events:none; }
+  #hpFill { background:linear-gradient(90deg,#33dd55,#aaff33); }
+  .stickzone { position:fixed; bottom:0; height:60%; }
+  #moveZone { left:0; width:50%; } #aimZone { right:0; width:50%; }
+  .stick { position:absolute; width:116px; height:116px; border-radius:50%; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.25); display:none; }
+  .nub { position:absolute; width:56px; height:56px; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); border:2px solid rgba(255,255,255,.6); }
+  #moveNub { background:rgba(120,200,255,.4); } #aimNub { background:rgba(255,120,90,.5); }
+  #moveHint { position:fixed; left:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
+  #aimHint { position:fixed; right:30px; bottom:48px; width:120px; text-align:center; font-size:13px; font-weight:800; opacity:.45; pointer-events:none; }
+  #chipChop { position:fixed; right:0; bottom:200px; width:50%; text-align:center; font-weight:900; font-size:20px; color:#9be36a; text-shadow:0 1px 4px #000; pointer-events:none; display:none; }
+  #respawn { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(120,0,0,.35); z-index:5; }
+  #respawn .t { font-size:40px; font-weight:900; text-shadow:0 2px 8px #000; }
+  #banner { position:fixed; top:42%; left:0; right:0; text-align:center; pointer-events:none; z-index:6; }
+  #banner span { display:inline-block; background:rgba(0,0,0,.62); padding:10px 22px; border-radius:14px; font-weight:900; font-size:24px; text-shadow:0 2px 8px #000; opacity:0; transition:opacity .2s; }
+  #join { position:fixed; inset:0; z-index:20; background:radial-gradient(circle at 50% 30%,#2a1c40,#0c0e16); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px; text-align:center; }
+  #join h1 { font-size:34px; font-weight:900; background:linear-gradient(90deg,#ffd23f,#ff5e3a); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #join p { opacity:.85; max-width:330px; line-height:1.4; } #join .ctrlnote { font-size:13px; opacity:.7; max-width:320px; }
+  #name { font-size:20px; padding:12px 16px; border-radius:12px; border:2px solid #ffffff44; background:#ffffff14; color:#fff; text-align:center; width:260px; }
+  #go { font-size:22px; font-weight:900; padding:16px 28px; border-radius:14px; border:none; color:#1a0f00; background:linear-gradient(90deg,#ffd23f,#ff8a3a); box-shadow:0 8px 24px #ff8a3a55; }
+  #over { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; text-align:center; padding:24px; }
+  #over h1 { font-size:38px; font-weight:900; text-shadow:0 2px 10px #000; }
+  #inter { position:fixed; left:0; right:0; bottom:232px; z-index:7; display:none; flex-direction:column; align-items:center; gap:5px; padding:0 8px; pointer-events:auto; }
+  #inter h2 { font-size:22px; font-weight:900; color:#ffd23f; }
+  #inter .lab { font-size:13px; font-weight:800; opacity:.9; margin-bottom:2px; }
+  #inter .cards { display:flex; gap:7px; justify-content:center; flex-wrap:wrap; max-width:560px; }
+  .card { flex:1 1 28%; min-width:92px; background:rgba(0,0,0,.5); border:2px solid #ffffff22; border-radius:12px; padding:9px 6px; }
+  .card .cn { font-size:13px; font-weight:900; } .card .cd2 { font-size:10px; opacity:.65; margin-top:2px; } .card .cv { font-size:11px; color:#ffd23f; margin-top:3px; font-weight:800; }
+  .card.perk.sel { border-color:#9be36a; } .card.picked { opacity:.4; } .card.tp.sel { border-color:#ffd23f; box-shadow:0 0 10px #ffd23f66; } .card.poor { opacity:.5; }
+  #treasury { color:#ffd23f; font-weight:900; }
+  #res { font-size:12px; font-weight:800; margin-top:3px; text-shadow:0 1px 2px #000; }
+  .card.wbuy.owned { border-color:#9be36a; box-shadow:0 0 8px #9be36a55; }
+  #armory { position:fixed; left:0; right:0; bottom:232px; display:none; justify-content:center; align-items:flex-end; gap:6px; flex-wrap:wrap; padding:0 8px; pointer-events:auto; z-index:7; }
+  #armory .ttl { width:100%; text-align:center; font-weight:900; color:#ffd23f; font-size:12px; text-shadow:0 1px 3px #000; }
+  #armory .wb { background:rgba(20,14,8,.82); border:2px solid #ffd23f; border-radius:10px; padding:5px 9px; font-size:11px; font-weight:800; color:#fff; }
+  #armory .wb.poor { opacity:.45; } #armory .wb.owned { border-color:#9be36a; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top"><div class="barwrap">
+  <div class="label" id="barLabel">CASTLE GATE</div>
+  <div class="bar"><div id="mainFill" style="width:100%"></div></div>
+  <div id="roundRow"></div>
+  <div id="objective"></div>
+  <div id="res"></div>
+</div></div>
+<div id="weps"></div>
+<div id="myhp"><div class="label">HP</div><div class="bar"><div id="hpFill" style="width:100%"></div></div></div>
+
+<div id="moveZone" class="stickzone"><div id="moveStick" class="stick"><div id="moveNub" class="nub"></div></div></div>
+<div id="aimZone" class="stickzone"><div id="aimStick" class="stick"><div id="aimNub" class="nub"></div></div></div>
+<div id="moveHint">MOVE</div><div id="aimHint">AIM & FIRE</div><div id="chipChop">CHOP!</div>
+<div id="banner"><span id="bannerTxt"></span></div>
+<div id="armory"></div>
+<div id="respawn"><div class="t">DOWN!</div><div style="font-size:22px;margin-top:8px">Respawning...</div></div>
+
+<div id="join">
+  <h1>HUNT FOR JEREMY</h1>
+  <p>Storm Jeremy's castle! Smash the GATE, then take down the King. Survive his guards and archers across the rounds.</p>
+  <div class="ctrlnote">Left thumb = move, right thumb = aim &amp; fire. Duck into the LEFT room to chop WOOD and the RIGHT room to mine IRON (build the ram). Earn gold from kills and buy weapons at the ARMORY in your camp.</div>
+  <input id="name" placeholder="Your hero name" maxlength="16" autocomplete="off">
+  <button id="go">STORM THE CASTLE</button>
+</div>
+<div id="over"><h1 id="overTxt"></h1><div id="overSub" style="font-size:18px;opacity:.85"></div></div>
+<div id="inter"></div>
+
+<script type="module">
+import { createWorld } from './scene.js';
+import { connect } from './net.js';
+const $ = s => document.querySelector(s);
+const world = createWorld($('#c'), { labels: false, quality: 'low' });
+const THREE = world.THREE;
+const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 400);
+
+let myId=null, weapons=null, myWep='blaster', lastSnap=null, facing=Math.PI;
+let perksCat=null, perkOrder=[], wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
+const params = new URLSearchParams(location.search); const preName = params.get('name');
+if (preName) $('#name').value = preName;
+
+const net = connect({
+  open(){ if (preName) doJoin(); },
+  welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; renderWep('blaster'); buildInter(); buildArmory(); },
+  roster(m){ world.setRoster(m.players); },
+  snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
+  event(ev){
+    if(ev.kind==='round') banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f');
+    else if(ev.kind==='intermission') banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600);
+    else if(ev.kind==='gatebreached') banner('GATE DOWN!', '#ff7adf');
+    else if(ev.kind==='perkok'){ myPerkRound=curRound(); markPerks(); banner('Perk: '+((perksCat&&perksCat[ev.perk]||{}).name||ev.perk),'#9be36a',900); }
+    else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); }
+    else if(ev.kind==='gameover') showOver(ev.result);
+    else if(ev.kind==='reset') hideOver();
+  },
+  close(){ banner('Disconnected - reload', '#fff'); },
+});
+
+function doJoin(){ const name=($('#name').value||'Hero').trim().slice(0,16)||'Hero'; net.join('player',name); $('#join').style.display='none'; startLoop(); }
+$('#go').onclick = doJoin; $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') doJoin(); });
+function renderWep(key){ const w=(weapons&&weapons[key])||{name:key,color:0xffffff}; const hex='#'+((w.color||0xffffff).toString(16).padStart(6,'0')); $('#weps').innerHTML=`<div class="wep" style="border-color:${hex}">${w.name}</div>`; }
+
+// joystick (move)
+let moveId=null, mcx=0, mcy=0, moveX=0, moveY=0;
+const mZone=$('#moveZone'), mStick=$('#moveStick'), mNub=$('#moveNub');
+mZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; moveId=t.identifier; mcx=t.clientX; mcy=t.clientY; mStick.style.display='block'; mStick.style.left=(mcx-58)+'px'; mStick.style.top=(mcy-58)+'px'; mNub.style.left='50%'; mNub.style.top='50%'; $('#moveHint').style.display='none'; e.preventDefault(); },{passive:false});
+mZone.addEventListener('touchmove', e=>{ for(const t of e.changedTouches){ if(t.identifier!==moveId) continue; let dx=t.clientX-mcx, dy=t.clientY-mcy; const max=46,d=Math.hypot(dx,dy); if(d>max){dx*=max/d;dy*=max/d;} mNub.style.left=(58+dx)+'px'; mNub.style.top=(58+dy)+'px'; moveX=dx/max; moveY=dy/max; } e.preventDefault(); },{passive:false});
+function endMove(e){ for(const t of e.changedTouches) if(t.identifier===moveId){ moveId=null; moveX=0; moveY=0; mStick.style.display='none'; } }
+mZone.addEventListener('touchend', endMove); mZone.addEventListener('touchcancel', endMove);
+
+// aim + fire
+let aimId=null, acx=0, acy=0, aimVX=0, aimVY=-1, aiming=false;
+const aZone=$('#aimZone'), aStick=$('#aimStick'), aNub=$('#aimNub');
+aZone.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; aimId=t.identifier; acx=t.clientX; acy=t.clientY; aiming=true; aStick.style.display='block'; aStick.style.left=(acx-58)+'px'; aStick.style.top=(acy-58)+'px'; aNub.style.left='50%'; aNub.style.top='50%'; $('#aimHint').style.display='none'; e.preventDefault(); },{passive:false});
+aZone.addEventListener('touchmove', e=>{ for(const t of e.changedTouches){ if(t.identifier!==aimId) continue; let dx=t.clientX-acx, dy=t.clientY-acy; const max=46,d=Math.hypot(dx,dy); if(d>6){ aimVX=dx/(d||1); aimVY=dy/(d||1); } if(d>max){dx*=max/d;dy*=max/d;} aNub.style.left=(58+dx)+'px'; aNub.style.top=(58+dy)+'px'; } e.preventDefault(); },{passive:false});
+function endAim(e){ for(const t of e.changedTouches) if(t.identifier===aimId){ aimId=null; aiming=false; aStick.style.display='none'; } }
+aZone.addEventListener('touchend', endAim); aZone.addEventListener('touchcancel', endAim);
+
+// desktop
+const keys={}; let usingMouse=false, mouseDown=false;
+const mouseNDC=new THREE.Vector2(), ray=new THREE.Raycaster(), groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0), gpt=new THREE.Vector3();
+addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true); addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
+addEventListener('mousemove', e=>{ usingMouse=true; mouseNDC.x=(e.clientX/innerWidth)*2-1; mouseNDC.y=-(e.clientY/innerHeight)*2+1; });
+addEventListener('mousedown', ()=>mouseDown=true); addEventListener('mouseup', ()=>mouseDown=false);
+
+setInterval(()=>{ if(!net.ready||myId==null) return; let mx=moveX, my=moveY; if(keys['a'])mx=-1; if(keys['d'])mx=1; if(keys['w'])my=-1; if(keys['s'])my=1; net.send({t:'in', mx, mz:my, a:facing}); }, 55);
+setInterval(()=>{ if(!net.ready) return; if(aiming||mouseDown||keys[' ']) net.send({t:'fire'}); }, 55);
+
+function angDiffAbs(a,b){ let d=Math.abs(a-b)%(Math.PI*2); return d>Math.PI?Math.PI*2-d:d; }
+function aimAssist(px,pz,base){ if(!lastSnap) return base; let bestAng=base, bestScore=Infinity; const cone=0.42, range=58;
+  const consider=(ex,ez)=>{ const dist=Math.hypot(ex-px,ez-pz); if(dist>range||dist<0.5) return; const ang=Math.atan2(ex-px,ez-pz); const da=angDiffAbs(ang,base); if(da>cone) return; const score=da*7+dist*0.12; if(score<bestScore){bestScore=score;bestAng=ang;} };
+  for(const t of (lastSnap.troops||[])) consider(t[1],t[2]);
+  if(lastSnap.king && lastSnap.king.vulnerable) consider(lastSnap.king.x,lastSnap.king.z);
+  return bestAng; }
+
+let running=false, lastT=performance.now();
+function startLoop(){ if(running) return; running=true; requestAnimationFrame(loop); }
+function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
+  let me=null; if(lastSnap) me=lastSnap.players.find(p=>p[0]===myId);
+  if(me){ const px=me[1], pz=me[2];
+    if(aiming) facing=aimAssist(px,pz,Math.atan2(aimVX,aimVY));
+    else if(usingMouse){ ray.setFromCamera(mouseNDC,camera); ray.ray.intersectPlane(groundPlane,gpt); if(gpt) facing=Math.atan2(gpt.x-px,gpt.z-pz); }
+    const mesh=world.getPlayerMesh(myId); const rx=mesh?mesh.g.position.x:px, rz=mesh?mesh.g.position.z:pz;
+    camera.position.set(rx,17,rz+19); camera.lookAt(rx,1.5,rz-13);
+  } else { camera.position.set(0,34,70); camera.lookAt(0,0,0); }
+  world.render(camera); requestAnimationFrame(loop);
+}
+
+function fmtTime(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'); }
+function updateHud(m){
+  const gateUp = m.gate && m.gate.hp>0;
+  $('#barLabel').textContent = gateUp ? 'CASTLE GATE' : 'KING JEREMY';
+  const frac = gateUp ? (m.gate.maxHp?m.gate.hp/m.gate.maxHp:0) : (m.king.maxHp?m.king.hp/m.king.maxHp:0);
+  const mf=$('#mainFill'); mf.style.width=Math.max(0,frac*100)+'%';
+  mf.style.background = gateUp ? 'linear-gradient(90deg,#b98a3a,#e8cf6a)' : 'linear-gradient(90deg,#ff2a4d,#ff7a2a)';
+  $('#roundRow').textContent = m.phase==='combat' ? `ROUND ${m.round}/${m.roundsTotal}  -  ${fmtTime(m.timeLeft)}`
+    : m.phase==='intermission' ? `INTERMISSION  -  next round in ${Math.ceil(m.timeLeft/1000)}s`
+    : m.phase==='lobby' ? 'Waiting for the King to start...' : '';
+  let obj='';
+  if(m.phase==='intermission') obj='<span style="color:#8fe3ff">Roam camp: Armorer = perks, Armory = weapons</span>';
+  else if(m.phase==='combat'){ if(gateUp) obj = m.ram ? '<span style="color:#9be36a">PUSH THE RAM into the gate!</span>' : 'Smash the GATE! Gather WOOD (left) + IRON (right) for the ram'; else obj='<span style="color:#ff7adf">GATE DOWN - KILL JEREMY!</span>'; }
+  $('#objective').innerHTML=obj;
+  const me=m.players.find(p=>p[0]===myId);
+  if(me){ const [,mxp,mzp,,hp,wep,alive,,maxHp,gold]=me; $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
+    if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
+    myGold = gold||0;
+    $('#respawn').style.display = alive?'none':'flex';
+    let nearTree=false, nearIron=false;
+    for(const t of (m.trees||[])){ if((t[1]-mxp)**2+(t[2]-mzp)**2<=3.7*3.7){nearTree=true;break;} }
+    for(const o of (m.ironNodes||[])){ if((o[1]-mxp)**2+(o[2]-mzp)**2<=3.7*3.7){nearIron=true;break;} }
+    const cc=$('#chipChop'); if(nearTree){ cc.style.display='block'; cc.textContent='CHOP WOOD!'; cc.style.color='#9be36a'; } else if(nearIron){ cc.style.display='block'; cc.textContent='MINE IRON!'; cc.style.color='#cfd6e0'; } else cc.style.display='none';
+    const inArmory = (m.phase==='combat'||m.phase==='intermission') && campCfg && ((mxp-campCfg.armory.x)**2+(mzp-campCfg.armory.z)**2 <= (campCfg.armory.r+1)*(campCfg.armory.r+1));
+    const ar=$('#armory'); ar.style.display = inArmory?'flex':'none';
+    if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
+  }
+  $('#res').innerHTML = `\u{1FAB5} ${m.wood||0}/${m.woodNeeded||0} &nbsp; \u26cf\ufe0f ${m.iron||0}/${m.ironNeeded||0} &nbsp; \u{1F4B0} ${myGold}`;
+  const meP = m.players.find(p=>p[0]===myId);
+  let atArmorer=false;
+  if(meP && m.phase==='intermission' && campCfg){ const dx=meP[1]-campCfg.armorer.x, dz=meP[2]-campCfg.armorer.z; atArmorer = (dx*dx+dz*dz <= (campCfg.armorer.r+1)*(campCfg.armorer.r+1)) && myPerkRound!==m.round; }
+  $('#inter').style.display = atArmorer ? 'flex' : 'none';
+  if(atArmorer) markPerks();
+}
+let bT; function banner(txt,color,hold){ const el=$('#bannerTxt'); el.textContent=txt; el.style.color=color||'#fff'; el.style.opacity=1; clearTimeout(bT); bT=setTimeout(()=>el.style.opacity=0, hold||1500); }
+function curRound(){ return lastSnap?lastSnap.round:0; }
+function buildInter(){ if(!perksCat) return; const el=$('#inter');
+  el.innerHTML='<div class="lab" style="color:#66ff9a">ARMORER - pick a perk (free)</div><div class="cards" id="perkCards"></div>';
+  const pc=$('#perkCards'); perkOrder.forEach(k=>{ const it=perksCat[k]; const c=document.createElement('div'); c.className='card perk'; c.dataset.k=k; c.innerHTML='<div class="cn">'+it.name+'</div><div class="cd2">'+it.desc+'</div>'; c.onclick=()=>{ if(myPerkRound!==curRound()) net.send({t:'perk',perk:k}); }; pc.appendChild(c); });
+}
+function markPerks(){ const picked=myPerkRound===curRound(); document.querySelectorAll('.card.perk').forEach(c=>c.classList.toggle('picked',picked)); }
+function buildArmory(){ if(!wbuy) return; const el=$('#armory'); el.innerHTML='<div class="ttl">ARMORY - buy a weapon</div>';
+  (wbuyOrder||[]).forEach(k=>{ const cost=wbuy[k]; const w=weapons[k]||{name:k}; const b=document.createElement('div'); b.className='wb'; b.dataset.k=k; b.dataset.cost=cost; b.textContent=w.name+' '+cost+'g'; b.onclick=()=>{ if(myWep!==k && myGold>=cost) net.send({t:'buyweapon',w:k}); }; el.appendChild(b); }); }
+function showOver(res){ const win = res==='attackers'; $('#over').style.display='flex'; $('#over').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')';
+  $('#overTxt').textContent = win?'JEREMY HAS FALLEN!':'THE CASTLE HELD'; $('#overTxt').style.color=win?'#aaff66':'#ff8866';
+  $('#overSub').textContent = win?'You stormed the castle and took down the King!':'Jeremy survived all the rounds. Better luck next siege!'; }
+function hideOver(){ $('#over').style.display='none'; }
+addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera)); world.resize(innerWidth,innerHeight,camera);
+</script>
+</body>
+</html>

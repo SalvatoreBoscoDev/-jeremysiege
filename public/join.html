@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Hunt for Jeremy — Join</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { height:100%; font-family:system-ui,sans-serif; color:#fff; background:#0a0712; overflow:hidden; }
+  #c { position:fixed; inset:0; width:100%; height:100%; z-index:0; }
+  #scrim { position:fixed; inset:0; z-index:1; background:radial-gradient(circle at 50% 32%, #170f2abb 0%, #0a0712ee 82%); pointer-events:none; }
+  .wrap { position:relative; z-index:2; min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:28px; text-align:center; }
+  h1 { font-size:40px; font-weight:900; letter-spacing:1px; line-height:1.05; background:linear-gradient(90deg,#ffd23f,#ff5e3a); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 4px 18px #000; }
+  .tag { opacity:.9; max-width:340px; line-height:1.45; font-size:15px; text-shadow:0 2px 8px #000; }
+  .live { font-size:12px; font-weight:800; letter-spacing:2px; color:#ff6b6b; text-shadow:0 0 8px #ff000088; }
+  .live b { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b3b; margin-right:6px; vertical-align:middle; animation:pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+  input { font-size:22px; padding:14px 18px; border-radius:14px; border:2px solid #ffffff55; background:#00000066; color:#fff; text-align:center; width:280px; outline:none; }
+  input:focus { border-color:#ffd23f; }
+  button { font-size:23px; font-weight:900; padding:18px 30px; border-radius:16px; border:none; color:#1a0f00; background:linear-gradient(90deg,#ffd23f,#ff8a3a); box-shadow:0 10px 28px #ff8a3a66; cursor:pointer; }
+  button:active { transform:scale(.97); }
+  .foot { position:fixed; bottom:14px; left:0; right:0; z-index:2; text-align:center; font-size:12px; opacity:.55; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="scrim"></div>
+<div class="wrap">
+  <div class="live"><b></b>LIVE — THE BATTLE IS RAGING</div>
+  <h1>HUNT FOR<br>JEREMY</h1>
+  <p class="tag">Jeremy is the evil King. Grab your weapons, storm the castle, and take him down. You'll respawn — just keep charging!</p>
+  <input id="name" placeholder="Enter your hero name" maxlength="16" autocomplete="off">
+  <button id="go">⚔️ STORM THE CASTLE</button>
+</div>
+<div class="foot">A birthday battle • built for the party</div>
+<script type="module">
+import { createWorld } from './scene.js';
+import { connect } from './net.js';
+const $=s=>document.querySelector(s);
+// Live game view behind the join form (lightweight; falls back to plain bg if WebGL is unavailable)
+try {
+  const world = createWorld($('#c'), { quality:'low', labels:false });
+  const THREE = world.THREE;
+  const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 700);
+  const net = connect({
+    roster(m){ world.setRoster(m.players); },
+    snapshot(m){ world.applySnapshot(m); },
+    event(){},
+  });
+  net.join('screen','join');
+  let lastT=performance.now();
+  function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
+    const a=now/13000; camera.position.set(Math.cos(a)*64+8, 56, Math.sin(a)*50+16); camera.lookAt(0,4,6);
+    world.render(camera); requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+  addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera));
+} catch(e) {}
+
+const name = $('#name');
+const go = () => { const n=(name.value||'Hero').trim().slice(0,16)||'Hero'; location.href='/play?name='+encodeURIComponent(n); };
+$('#go').onclick = go;
+name.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+name.focus();
+</script>
+</body>
+</html>

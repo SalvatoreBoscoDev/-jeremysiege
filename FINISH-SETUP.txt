@@ -1,0 +1,57 @@
+HUNT FOR JEREMY — FINISH SETUP (2 steps)
+========================================
+Everything is built. Container #101 "jeremysiege" on your Proxmox has Node,
+git, and cloudflared installed; it pulls your code from GitHub every 60s and
+runs the game on port 8080. jeremysiege.com is on your Cloudflare. Two steps left.
+
+--------------------------------------------------------------------
+STEP 1 — Put your game code on GitHub (one time)
+--------------------------------------------------------------------
+Double-click  1-PUSH-TO-GITHUB.cmd  (in this folder).
+- If a GitHub login pops up, sign in as SalvatoreBoscoDev.
+- ~60 seconds later the container pulls the code and the game starts.
+(For any future change: double-click 2-UPDATE-LIVE.cmd.)
+
+--------------------------------------------------------------------
+STEP 2 — Turn on the public link (Cloudflare Tunnel)
+--------------------------------------------------------------------
+Open the Proxmox shell you already have open:  pve  >  Shell  (black window).
+
+2a) Run this (it prints a link):
+
+    pct exec 101 -- env HOME=/root /usr/local/bin/cloudflared tunnel login
+
+    Copy the https://dash.cloudflare.com/argotunnel... link it prints,
+    open it in your browser, and click  jeremysiege.com  to Authorize.
+    You should see "cert.pem ... installed".
+
+2b) Then paste this ONE block (creates the tunnel, points the domain at the
+    game, and starts it on boot):
+
+    pct exec 101 -- env HOME=/root bash -c '
+    CF=/usr/local/bin/cloudflared
+    $CF tunnel create jeremysiege || true
+    TID=$(basename $(ls -t /root/.cloudflared/*.json | head -1) .json)
+    mkdir -p /etc/cloudflared
+    printf "tunnel: %s\ncredentials-file: /root/.cloudflared/%s.json\ningress:\n  - hostname: jeremysiege.com\n    service: http://localhost:8080\n  - service: http_status:404\n" "$TID" "$TID" > /etc/cloudflared/config.yml
+    $CF tunnel route dns jeremysiege jeremysiege.com || true
+    $CF service install
+    systemctl enable --now cloudflared
+    echo ALL_DONE'
+
+Then open  https://jeremysiege.com  — your game should load.
+
+--------------------------------------------------------------------
+IF the cert won't download inside the container (the snag we hit):
+--------------------------------------------------------------------
+When you open the link in step 2a, your BROWSER will download a file called
+"cert.pem" (check your Downloads). Just MOVE that cert.pem into THIS folder
+(HuntForJeremy) and tell me — I'll inject it and run step 2b for you.
+
+--------------------------------------------------------------------
+Handy checks (in the Proxmox shell):
+    pct exec 101 -- systemctl status hunt-for-jeremy   (is the game running?)
+    pct exec 101 -- systemctl status cloudflared        (is the tunnel up?)
+    pct exec 101 -- journalctl -u hunt-for-jeremy -n 30 (game logs)
+
+To delete everything after the party: in Proxmox, stop & destroy container 101.

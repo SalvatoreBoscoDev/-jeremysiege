@@ -1,0 +1,7 @@
+node_modules/
+npm-debug.log*
+*.log
+_smoke*.mjs
+.DS_Store
+deploy/*.pem
+deploy/*credentials*.json

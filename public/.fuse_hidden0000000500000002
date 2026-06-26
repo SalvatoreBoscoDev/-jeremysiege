@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVIL WIZARD — Hunt for Jeremy</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+  html,body { height:100%; overflow:hidden; background:#0b0d14; font-family:system-ui,sans-serif; color:#fff; cursor:crosshair; }
+  #c { position:fixed; inset:0; width:100%; height:100%; }
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #title { position:absolute; top:12px; left:50%; transform:translateX(-50%); }
+  #title h1 { font-size:22px; font-weight:900; color:#b07bff; text-shadow:0 2px 8px #000; }
+  #bars { position:absolute; top:44px; left:50%; transform:translateX(-50%); width:min(620px,76vw); }
+  .bar { height:18px; border-radius:9px; background:rgba(0,0,0,.55); border:2px solid #fff3; overflow:hidden; margin-top:4px; }
+  .bar>div { height:100%; transition:width .12s; }
+  #gateFill { background:linear-gradient(90deg,#b98a3a,#e8cf6a); } #hpFill { background:linear-gradient(90deg,#ff2a4d,#ff7a2a); } #manaFill { background:linear-gradient(90deg,#5e9bff,#b07bff); }
+  .blabel { font-size:11px; font-weight:800; text-shadow:0 1px 3px #000; margin-top:5px; }
+  #status { position:absolute; top:150px; left:50%; transform:translateX(-50%); text-align:center; font-weight:900; font-size:17px; text-shadow:0 1px 4px #000; }
+  #gold { position:absolute; top:16px; left:16px; background:rgba(0,0,0,.45); padding:8px 14px; border-radius:10px; font-weight:900; font-size:18px; color:#ffd23f; }
+  #feed { position:absolute; top:16px; right:16px; width:220px; text-align:right; font-size:13px; }
+  #feed div { background:rgba(0,0,0,.35); padding:3px 8px; border-radius:6px; margin-bottom:4px; }
+  #spells { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:12px; pointer-events:auto; }
+  .sp { width:120px; text-align:center; background:rgba(0,0,0,.5); border:2px solid #fff2; border-radius:14px; padding:9px 6px; cursor:pointer; }
+  .sp.sel { border-color:#b07bff; background:rgba(176,123,255,.2); box-shadow:0 0 14px #b07bff66; }
+  .sp .k { font-size:16px; font-weight:900; color:#b07bff; } .sp .n { font-size:12px; font-weight:800; margin:2px 0; } .sp .cost { font-size:10px; color:#7fb0ff; } .sp .cd { height:5px; border-radius:3px; background:#222; margin-top:5px; overflow:hidden; } .sp .cd>div { height:100%; width:100%; background:#b07bff; }
+  #ctrls { position:absolute; bottom:18px; right:18px; pointer-events:auto; display:flex; gap:10px; }
+  button { pointer-events:auto; font-weight:800; font-size:14px; padding:10px 16px; border-radius:12px; border:none; color:#1a0f00; background:linear-gradient(90deg,#b07bff,#7b5eff); cursor:pointer; }
+  button.alt { background:#333; color:#fff; border:1px solid #fff3; }
+  .hint { position:absolute; bottom:116px; left:50%; transform:translateX(-50%); font-size:12px; opacity:.55; }
+  #shop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; background:rgba(10,8,20,.72); pointer-events:auto; }
+  #shop h2 { font-size:28px; color:#ffd23f; }
+  #shopItems { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; max-width:760px; }
+  .item { width:150px; background:rgba(0,0,0,.5); border:2px solid #ffffff22; border-radius:14px; padding:12px; text-align:center; cursor:pointer; }
+  .item:hover { border-color:#ffd23f; } .item.poor { opacity:.45; cursor:default; }
+  .item .nm { font-weight:900; font-size:15px; } .item .ds { font-size:11px; opacity:.7; margin:4px 0; } .item .cost { font-weight:900; color:#ffd23f; }
+  #overlay { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:radial-gradient(circle at 50% 30%,#2a1c40,#0a0c14); text-align:center; padding:24px; }
+  #overlay h1 { font-size:36px; color:#b07bff; } #overlay p { opacity:.85; max-width:480px; line-height:1.5; }
+  #overlay input { font-size:18px; padding:10px 14px; border-radius:10px; border:2px solid #fff4; background:#fff2; color:#fff; text-align:center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="gold">0 gold</div>
+  <div id="feed"></div>
+  <div id="title"><h1>EVIL WIZARD - defend the castle</h1></div>
+  <div id="bars">
+    <div class="blabel" id="gateLabel">CASTLE GATE</div><div class="bar"><div id="gateFill" style="width:100%"></div></div>
+    <div class="blabel">KING</div><div class="bar"><div id="hpFill" style="width:100%"></div></div>
+    <div class="blabel">MANA</div><div class="bar"><div id="manaFill" style="width:100%"></div></div>
+  </div>
+  <div id="status"></div>
+  <div class="hint">WASD walk the hilltop &nbsp;•&nbsp; pick a spell (1-4), then click the battlefield. Heal targets the King; Rally summons guards.</div>
+  <div id="spells"></div>
+  <div id="ctrls"><button id="startBtn">START</button><button id="resetBtn" class="alt">Reset</button></div>
+  <div id="shop"><h2>INTERMISSION - SHOP</h2><div id="shopItems"></div><button id="nextBtn">START NEXT ROUND</button></div>
+</div>
+<div id="overlay"><h1>THE EVIL WIZARD</h1>
+  <p>Serve King Jeremy from your tower. Rain meteors and frost on the attackers and heal the King. Between rounds, spend the castle's gold on defenses.</p>
+  <input id="wname" value="Marin" maxlength="16"><button id="enter">Begin Casting</button>
+</div>
+
+<script type="module">
+import { createWorld } from './scene.js';
+import { connect } from './net.js';
+import { HILL, WIZ_TOWER, LANE } from './shared.js';
+const $=s=>document.querySelector(s);
+const world=createWorld($('#c'), { quality:'high' });
+const THREE=world.THREE;
+const camera=new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 600);
+let wcamX=0, wcamZ=LANE.kingZ-18;
+let spells=null, shopCfg=null, selSpell='meteor', lastSnap=null, lastGold=-1; const lastCast={heal:0,meteor:0,freeze:0,rally:0};
+const order=['heal','meteor','freeze','rally'];
+const reticle=new THREE.Mesh(new THREE.RingGeometry(2,3,24), new THREE.MeshBasicMaterial({color:0xb07bff,side:THREE.DoubleSide}));
+reticle.rotation.x=-Math.PI/2; reticle.position.y=0.4; world.scene.add(reticle);
+
+const net=connect({
+  welcome(m){ spells=m.wizard.spells; shopCfg=m.shop; build(); buildShop(); },
+  roster(m){ world.setRoster(m.players); },
+  snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
+  event(ev){ if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='round') addFeed('Round '+ev.round); else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='gameover') addFeed(ev.result==='king'?'CASTLE HELD!':'King has fallen'); },
+});
+$('#enter').onclick=()=>{ net.join('wizard',($('#wname').value||'Marin').trim().slice(0,16)||'Marin'); $('#overlay').style.display='none'; startLoop(); };
+$('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'});
+
+function build(){ const wrap=$('#spells'); wrap.innerHTML='';
+  order.forEach((key,i)=>{ const s=spells[key]; const el=document.createElement('div'); el.className='sp'+(key===selSpell?' sel':''); el.dataset.k=key;
+    el.innerHTML=`<div class="k">${i+1}</div><div class="n">${s.desc.split('(')[0]}</div><div class="cost">${s.mana} mana</div><div class="cd"><div></div></div>`;
+    el.onclick=()=>{ selSpell=key; refresh(); }; wrap.appendChild(el); }); }
+function refresh(){ document.querySelectorAll('.sp').forEach(e=>e.classList.toggle('sel', e.dataset.k===selSpell)); }
+function buildShop(){ const wrap=$('#shopItems'); wrap.innerHTML=''; if(!shopCfg) return; for(const key of Object.keys(shopCfg)){ const it=shopCfg[key]; const el=document.createElement('div'); el.className='item'; el.dataset.k=key; el.dataset.cost=it.cost; el.innerHTML=`<div class="nm">${key.toUpperCase()}</div><div class="ds">${it.desc}</div><div class="cost">${it.cost}g</div>`; el.onclick=()=>{ if((lastSnap?.gold||0)>=it.cost) net.send({t:'buy',item:key}); }; wrap.appendChild(el); } }
+addEventListener('keydown', e=>{ const n=parseInt(e.key); if(n>=1&&n<=4){ selSpell=order[n-1]; refresh(); } });
+
+let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0), aim=new THREE.Vector3();
+addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
+addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls,#spells')) cast(); });
+function cast(){ if(!spells||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[selSpell]<spells[selSpell].cd) return; lastCast[selSpell]=now; net.send({t:'spell',kind:selSpell,x:aim.x,z:aim.z}); }
+// --- WASD movement: the Wizard walks the hilltop ---
+const wkeys={};
+addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if('wasd'.includes(k)) wkeys[k]=true; });
+addEventListener('keyup', e=>{ const k=e.key.toLowerCase(); if('wasd'.includes(k)) wkeys[k]=false; });
+setInterval(()=>{ if(!net.ready) return; let mx=(wkeys['a']?1:0)-(wkeys['d']?1:0), mz=(wkeys['w']?1:0)-(wkeys['s']?1:0); const L=Math.hypot(mx,mz)||1; mx/=L; mz/=L; const w=lastSnap&&lastSnap.wizard; let a=0; if(w) a=Math.atan2(aim.x-w.x, aim.z-w.z); net.send({t:'wmove',mx,mz,a}); }, 40);
+
+let running=false,lastT=performance.now();
+function startLoop(){ if(running)return; running=true; requestAnimationFrame(loop); }
+function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
+  const w=lastSnap&&lastSnap.wizard; const wx=w?w.x:-14, wz=w?w.z:LANE.kingZ; // follow the Wizard on the hilltop
+  wcamX += (wx*0.5 - wcamX)*0.08; wcamZ += ((wz-18) - wcamZ)*0.08;
+  camera.position.set(wcamX + Math.sin(now/6000)*1, HILL.height+34, wcamZ); camera.lookAt(wx*0.35, HILL.height-2, wz+50); world.render(camera);
+  if(spells) document.querySelectorAll('.sp').forEach(el=>{ const k=el.dataset.k; el.querySelector('.cd>div').style.width=Math.min(1,(Date.now()-lastCast[k])/spells[k].cd)*100+'%'; });
+  requestAnimationFrame(loop);
+}
+function fmt(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'); }
+function updateHud(m){
+  $('#gateFill').style.width=(m.gate.maxHp?m.gate.hp/m.gate.maxHp*100:0)+'%';
+  $('#hpFill').style.width=(m.king.maxHp?m.king.hp/m.king.maxHp*100:0)+'%';
+  if(m.wizard) $('#manaFill').style.width=m.wizard.mana+'%';
+  $('#gateLabel').textContent = m.gate.hp>0?'CASTLE GATE':'GATE BREACHED - guard the King!';
+  $('#gold').textContent=(m.gold||0)+' gold';
+  $('#status').textContent = m.phase==='combat'?`ROUND ${m.round}/${m.roundsTotal}  -  ${fmt(m.timeLeft)}`:m.phase==='intermission'?`INTERMISSION  -  ${Math.ceil(m.timeLeft/1000)}s`:m.phase==='lobby'?'Waiting to start':'';
+  $('#shop').style.display = m.phase==='intermission'?'flex':'none';
+  if(m.gold!==lastGold){ lastGold=m.gold; document.querySelectorAll('.item').forEach(el=>el.classList.toggle('poor', m.gold<+el.dataset.cost)); }
+}
+const feed=$('#feed'); const items=[]; function addFeed(t){ items.unshift(t); items.length=Math.min(8,items.length); feed.innerHTML=items.map(x=>`<div>${x}</div>`).join(''); }
+addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera)); world.resize(innerWidth,innerHeight,camera);
+</script>
+</body>
+</html>

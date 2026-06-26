@@ -1,0 +1,16 @@
+{
+  "name": "hunt-for-jeremy",
+  "version": "1.0.0",
+  "description": "Hunt for Jeremy - a 40-player browser party game. Storm the castle, take down King Jeremy.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node setup-vendor.js"
+  },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4",
+    "three": "^0.160.0",
+    "ws": "^8.18.0"
+  }
+}

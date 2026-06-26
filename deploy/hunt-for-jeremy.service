@@ -1,0 +1,15 @@
+[Unit]
+Description=Hunt for Jeremy game server
+After=network.target
+
+[Service]
+Type=simple
+User=hfj
+WorkingDirectory=/opt/hunt-for-jeremy
+ExecStart=/usr/bin/node server.js
+Environment=PORT=8080
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

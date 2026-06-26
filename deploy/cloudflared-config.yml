@@ -1,0 +1,10 @@
+# Cloudflare Tunnel config (permanent named tunnel).
+# Put this at /etc/cloudflared/config.yml on the VM after `cloudflared tunnel create hunt-for-jeremy`.
+# Replace the tunnel id + credentials filename, and the hostname with your domain.
+tunnel: <TUNNEL-ID>
+credentials-file: /etc/cloudflared/<TUNNEL-ID>.json
+
+ingress:
+  - hostname: jeremy.yourdomain.com
+    service: http://localhost:8080
+  - service: http_status:404
