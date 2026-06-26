@@ -242,7 +242,11 @@ function updateHud(m){
   if(m.phase==='intermission'){ obj='Visit the camp stalls to upgrade'; objCol='#8fe3ff'; }
   else if(m.phase==='combat'){ if(gateUp){ obj = m.ram ? 'PUSH THE RAM into the gate!' : 'Build the RAM: gather WOOD + IRON'; objCol = m.ram ? '#9be36a' : '#dfe6ff'; } else { obj='GATE DOWN — KILL JEREMY!'; objCol='#ff7adf'; } }
   const me=m.players.find(p=>p[0]===myId);
-  if(me){ const [,mxp,mzp,,hp,wep,alive,,maxHp,gold,cw,ci]=me; $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
+  if(me){ const [,sxp,szp,,hp,wep,alive,,maxHp,gold,cw,ci]=me;
+    // Use the smooth PREDICTED position (not the laggy server one) for proximity prompts, so the chop/mine
+    // chip doesn't flicker/spam on phones where the server position jitters behind your avatar.
+    const mxp = myPos?myPos.x:sxp, mzp = myPos?myPos.z:szp;
+    $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
     if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
     myGold = gold||0;
     $('#respawn').style.display = alive?'none':'flex';
