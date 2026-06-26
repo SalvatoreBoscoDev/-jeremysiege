@@ -212,7 +212,7 @@ function endRoundToIntermission() {
   phase = 'intermission'; phaseEndsAt = now() + interMs;
   broadcast({ t: 'ev', kind: 'intermission', round, gold });
 }
-function endGame(who) { phase = 'over'; result = who; broadcast({ t: 'ev', kind: 'gameover', result: who }); }
+function endGame(who) { phase = 'over'; result = who; phaseEndsAt = now() + 14000; broadcast({ t: 'ev', kind: 'gameover', result: who }); }   // auto-return to lobby ~14s later
 function buy(item) {
   if (phase !== 'intermission') return;
   const cfg = SHOP[item]; if (!cfg || gold < cfg.cost) return;
@@ -346,6 +346,7 @@ setInterval(() => {
   const combat = phase === 'combat';
   if (combat && t >= phaseEndsAt && king.alive) endRoundToIntermission();
   else if (phase === 'intermission' && t >= phaseEndsAt) startRound(round + 1);
+  else if (phase === 'over' && t >= phaseEndsAt) resetGame();   // after game over, auto-return to lobby so the next match can start
 
   // King / Wizard positions are now CLIENT-AUTHORITATIVE (see 'kpos' / 'wpos' handlers); no server integration.
   for (const tr of trees.values()) if (!tr.alive && t >= tr.regrowAt) { tr.alive = true; tr.hp = TREE.hp; }
