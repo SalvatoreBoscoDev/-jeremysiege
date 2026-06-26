@@ -27,7 +27,7 @@ export function createWorld(canvas, opts = {}) {
   scene.add(sun); scene.add(sun.target); sun.target.position.set(0, 0, 0);
   if (realShadows) {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     const c = sun.shadow.camera; c.near = 1; c.far = 320; c.left = -100; c.right = 100; c.top = 130; c.bottom = -130;
     sun.shadow.bias = -0.0004;
   }
@@ -342,10 +342,10 @@ export function createWorld(canvas, opts = {}) {
   const tBodyMat = new THREE.MeshStandardMaterial({ roughness: 0.6, emissive: 0x2a0000, emissiveIntensity: 0.4 });
   const tHeadGeo = new THREE.SphereGeometry(0.55, 8, 8);
   const tHeadMat = new THREE.MeshStandardMaterial({ color: 0x6a2a1a, roughness: 0.7 });
-  const troopBody = new THREE.InstancedMesh(tBodyGeo, tBodyMat, MAX_TROOPS); troopBody.count = 0; troopBody.frustumCulled = false; troopBody.castShadow = realShadows; troopBody.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_TROOPS * 3), 3); scene.add(troopBody);
+  const troopBody = new THREE.InstancedMesh(tBodyGeo, tBodyMat, MAX_TROOPS); troopBody.count = 0; troopBody.frustumCulled = false; troopBody.castShadow = false;   // many instanced troops -> skip their shadow casting (big perf win) troopBody.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_TROOPS * 3), 3); scene.add(troopBody);
   const troopHead = new THREE.InstancedMesh(tHeadGeo, tHeadMat, MAX_TROOPS); troopHead.count = 0; troopHead.frustumCulled = false; scene.add(troopHead);
   const tHelmGeo = new THREE.ConeGeometry(0.62, 0.7, 8); const tHelmMat = new THREE.MeshStandardMaterial({ color: 0x3a3b46, metalness: 0.72, roughness: 0.34 });
-  const troopHelm = new THREE.InstancedMesh(tHelmGeo, tHelmMat, MAX_TROOPS); troopHelm.count = 0; troopHelm.frustumCulled = false; troopHelm.castShadow = realShadows; scene.add(troopHelm);
+  const troopHelm = new THREE.InstancedMesh(tHelmGeo, tHelmMat, MAX_TROOPS); troopHelm.count = 0; troopHelm.frustumCulled = false; troopHelm.castShadow = false; scene.add(troopHelm);
   const troopShadow = realShadows ? null : new THREE.InstancedMesh(shadowGeo, shadowMat, MAX_TROOPS);
   if (troopShadow) { troopShadow.count = 0; troopShadow.frustumCulled = false; scene.add(troopShadow); }
   const troopState = new Map();
@@ -441,12 +441,8 @@ export function createWorld(canvas, opts = {}) {
       else { const m = rec.m; const dx = x - rec.lx, dy = y - rec.ly, dz = z - rec.lz; const len = Math.hypot(dx, dy, dz); if (rec.orient && len > 0.0005) m.quaternion.setFromUnitVectors(_up, _tmpDir.set(dx / len, dy / len, dz / len)); m.position.set(x, y, z); rec.lx = x; rec.ly = y; rec.lz = z; }
     }
     for (const [id, rec] of projMeshes) if (!seenP.has(id)) { scene.remove(rec.m); projMeshes.delete(id); }
-    const seenTr = new Set();
-    for (const tt of s.trees || []) { const [id, x, z] = tt; seenTr.add(id); ensureTree(id, x, z); }
-    for (const [id, g] of treeMeshes) if (!seenTr.has(id)) { scene.remove(g); treeMeshes.delete(id); }
-    const seenOre = new Set();
-    for (const oo of s.ironNodes || []) { const [id, x, z] = oo; seenOre.add(id); ensureOre(id, x, z); }
-    for (const [id, g] of oreMeshes) if (!seenOre.has(id)) { scene.remove(g); oreMeshes.delete(id); }
+    if (s.trees) { const seenTr = new Set(); for (const tt of s.trees) { const [id, x, z] = tt; seenTr.add(id); ensureTree(id, x, z); } for (const [id, g] of treeMeshes) if (!seenTr.has(id)) { scene.remove(g); treeMeshes.delete(id); } }
+    if (s.ironNodes) { const seenOre = new Set(); for (const oo of s.ironNodes) { const [id, x, z] = oo; seenOre.add(id); ensureOre(id, x, z); } for (const [id, g] of oreMeshes) if (!seenOre.has(id)) { scene.remove(g); oreMeshes.delete(id); } }
     // builds: rise out of the ground as they're built, sink when destroyed
     for (const bb of s.builds || []) { const [id, kind, x, z, built, bw, bi, needW, needI] = bb; const g = ensureBuild(id, kind); g.position.set(x, 0, z); const prog = built ? 1 : Math.min(1, ((bw / Math.max(1, needW)) + (bi / Math.max(1, needI))) / 2); if (g.userData.tentMat) g.userData.tentMat.opacity = 0.32 + 0.68 * prog; }
     // friendly troops: lazy meshes, lerped toward their server position in update()

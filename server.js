@@ -368,7 +368,7 @@ function resetGame() {
 
 // ---------- tick ----------
 let last = Date.now();
-let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now();
+let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now(), snapN = 0;
 setInterval(() => {
   const _hStart = performance.now();
   const t = now(); const dt = Math.min(0.1, (t - last) / 1000); last = t;
@@ -486,18 +486,19 @@ setInterval(() => {
   }
   projectiles = keep;
 
-  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(2), +p.z.toFixed(2), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i]);
+  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
   const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1), +(tr.hp / TROOP.hp).toFixed(2)]);
-  const trees_ = []; for (const tr of trees.values()) if (tr.alive) trees_.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]);
-  const iron_ = []; for (const o of irons.values()) if (o.alive) iron_.push([o.id, +o.x.toFixed(1), +o.z.toFixed(1)]);
+  const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
+  const trees_ = sendWorld ? [...trees.values()].filter(tr => tr.alive).map(tr => [tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]) : null;
+  const iron_  = sendWorld ? [...irons.values()].filter(o => o.alive).map(o => [o.id, +o.x.toFixed(1), +o.z.toFixed(1)]) : null;
   broadcast({
     t: 's', phase, round, roundsTotal, result,
     timeLeft: (phase === 'combat' || phase === 'intermission') ? Math.max(0, phaseEndsAt - t) : 0,
     gold, gate: { hp: Math.round(gate.hp), maxHp: Math.round(gate.maxHp), open: king.gateOpen ? 1 : 0 },
-    king: { x: +king.x.toFixed(2), z: +king.z.toFixed(2), a: +king.a.toFixed(2), hp: Math.round(king.hp), maxHp: king.maxHp, alive: king.alive ? 1 : 0, vulnerable: (!up && combat) ? 1 : 0, guards: guardCount(), up: king.up },
-    wizard: wizard ? { mana: Math.round(wizard.mana), x: +wizard.x.toFixed(2), z: +wizard.z.toFixed(2), a: +wizard.a.toFixed(2) } : null,
-    players: ps, proj: prj, troops: trp, trees: trees_, ironNodes: iron_,
+    king: { x: +king.x.toFixed(1), z: +king.z.toFixed(1), a: +king.a.toFixed(2), hp: Math.round(king.hp), maxHp: king.maxHp, alive: king.alive ? 1 : 0, vulnerable: (!up && combat) ? 1 : 0, guards: guardCount(), up: king.up },
+    wizard: wizard ? { mana: Math.round(wizard.mana), x: +wizard.x.toFixed(1), z: +wizard.z.toFixed(1), a: +wizard.a.toFixed(2) } : null,
+    players: ps, proj: prj, troops: trp, ...(sendWorld ? { trees: trees_, ironNodes: iron_ } : {}),
     wood: ram.bw, iron: ram.bi, woodNeeded: woodNeeded(), ironNeeded: ironNeeded(),
     ram: ram.active ? { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1) } : null,
     ramSite: { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1), built: ram.built ? 1 : 0, active: ram.active ? 1 : 0, bw: ram.bw, bi: ram.bi, needW: woodNeeded(), needI: ironNeeded() },
