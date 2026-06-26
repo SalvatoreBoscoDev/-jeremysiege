@@ -6,9 +6,11 @@ import { LANE, POCKET, CAMP, HILL, WIZ_TOWER, WEAPONS, WEAPON_ORDER, FOREST, TRE
 
 export function createWorld(canvas, opts = {}) {
   const labels = opts.labels !== false;
-  const quality = opts.quality || 'high';
-  const realShadows = quality === 'high';
-  const detail = quality === 'high';
+  // Quality can be forced per-page with ?q=low|medium|high (e.g. open /king?q=medium on a weaker PC).
+  const urlQ = (typeof location !== 'undefined') ? new URLSearchParams(location.search).get('q') : null;
+  const quality = urlQ || opts.quality || 'high';
+  const realShadows = quality === 'high';        // shadows are the big GPU cost
+  const detail = quality !== 'low';              // 'medium' = full detail + nice materials, but NO shadows -> way lighter
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality !== 'low', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'low' ? 1.5 : 2));
