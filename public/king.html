@@ -90,6 +90,7 @@
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
 import { HILL, LANE, KING } from './shared.js';
+import { Sound } from './sound.js';
 const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
 const THREE=world.THREE;
@@ -107,12 +108,12 @@ const net=connect({
   roster(m){ world.setRoster(m.players); window._att=m.count; },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
   event(ev){
-    if(ev.kind==='gameover'){ const win=ev.result==='king'; $('#big').style.display='flex'; $('#big').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')'; $('#bigTxt').textContent=win?'THE CASTLE HELD!':'THE KING HAS FALLEN'; $('#bigTxt').style.color=win?'#aaff66':'#ff5555'; $('#bigSub').textContent=win?'You survived every round. Long live Jeremy!':'The horde broke through.'; }
+    if(ev.kind==='gameover'){ const win=ev.result==='king'; $('#big').style.display='flex'; $('#big').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')'; $('#bigTxt').textContent=win?'THE CASTLE HELD!':'THE KING HAS FALLEN'; $('#bigTxt').style.color=win?'#aaff66':'#ff5555'; $('#bigSub').textContent=win?'You survived every round. Long live Jeremy!':'The horde broke through.'; Sound[win?'win':'lose'](); }
     else if(ev.kind==='reset'){ $('#big').style.display='none'; }
-    else if(ev.kind==='round') addFeed('Round '+ev.round+' begins'); else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='ramhit') addFeed('Ram hit the gate!');
+    else if(ev.kind==='round'){ addFeed('Round '+ev.round+' begins'); Sound.round(); } else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='ramhit'){ addFeed('Ram hit the gate!'); Sound.gateHit(); }
   },
 });
-$('#enter').onclick=()=>{ net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); world.setLocalKing(); $('#overlay').style.display='none'; startLoop(); };
+$('#enter').onclick=()=>{ Sound.init(); net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); world.setLocalKing(); $('#overlay').style.display='none'; startLoop(); };
 $('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'}); $('#gateBtn').onclick=()=>net.send({t:'gate'});
 
 function buildShop(){ const wrap=$('#shopItems'); wrap.innerHTML=''; if(!shopCfg) return;
@@ -125,7 +126,7 @@ let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane
 addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
 addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls')) cast('cannon'); });
 addEventListener('contextmenu', e=>e.preventDefault());
-const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); if(k==='f' && !keys[k]) net.send({t:'gate'}); keys[k]=true; });
+const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); if(k==='f' && !keys[k]) net.send({t:'gate'}); if(k==='m' && !keys[k]) Sound.toggleMute(); keys[k]=true; });
 addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 function cast(kind){ if(!cfg||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[kind]<cfg.attacks[kind].cd) return; lastCast[kind]=now; net.send({t:'katk',kind,x:aim.x,z:aim.z}); }
 setInterval(()=>{ if(!net.ready||!kpos) return; const a=Math.atan2(aim.x-kpos.x, aim.z-kpos.z); net.send({t:'kpos', x:+kpos.x.toFixed(2), z:+kpos.z.toFixed(2), a}); }, 40);

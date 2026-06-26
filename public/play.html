@@ -112,6 +112,7 @@
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
 import { PLAYER, LANE, clampToLane, PERK_FX, CANNON, ABILITIES } from './shared.js';
+import { Sound } from './sound.js';
 const $ = s => document.querySelector(s);
 const world = createWorld($('#c'), { labels: false, quality: 'low' });
 const THREE = world.THREE;
@@ -124,7 +125,7 @@ let myPos=null, myWasDead=false;   // client-authoritative local position
 let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
 const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
 if (preName) $('#name').value = preName;
-const myAbility = ABILITIES[preClass] || ABILITIES.blaster;   // class active ability
+let myAbility = ABILITIES[preClass] || ABILITIES.blaster;   // active ability FOLLOWS the equipped weapon (buy a weapon = its ability)
 let myAbilityAt = 0, dashUntil = 0;
 $('#abilityBtn .an').textContent = myAbility.name;
 function useAbility(){
@@ -132,6 +133,7 @@ function useAbility(){
   const me = lastSnap.players.find(p=>p[0]===myId); if(!me || !me[6]) return;
   const t = Date.now(); if(t - myAbilityAt < myAbility.cd) return; myAbilityAt = t;
   if(myAbility.kind==='dash') dashUntil = t + myAbility.dur; else net.send({t:'ability'});
+  Sound.ability();
   banner(myAbility.name+'!', '#ffd23f', 700);
 }
 
@@ -141,21 +143,23 @@ const net = connect({
   roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
   event(ev){
-    if(ev.kind==='round') banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f');
-    else if(ev.kind==='intermission') banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600);
-    else if(ev.kind==='gatebreached') banner('GATE DOWN!', '#ff7adf');
-    else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); }
-    else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); }
-    else if(ev.kind==='boughtcosmetic'){ myCos[ev.slot]=ev.id; myCosOwned=ev.owned||myCosOwned; if(typeof ev.gold==='number') myGold=ev.gold; refreshCosmetics(); banner('Looking good!','#ff8ad6',800); }
-    else if(ev.kind==='gameover') showOver(ev.result);
+    if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
+    else if(ev.kind==='intermission'){ banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600); Sound.intermission(); }
+    else if(ev.kind==='gatebreached'){ banner('GATE DOWN!', '#ff7adf'); Sound.gateBreach(); }
+    else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); Sound.buy(); }
+    else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); Sound.buy(); }
+    else if(ev.kind==='boughtcosmetic'){ myCos[ev.slot]=ev.id; myCosOwned=ev.owned||myCosOwned; if(typeof ev.gold==='number') myGold=ev.gold; refreshCosmetics(); banner('Looking good!','#ff8ad6',800); Sound.buy(); }
+    else if(ev.kind==='built'){ Sound.build(); }
+    else if(ev.kind==='gameover'){ showOver(ev.result); Sound[ev.result==='attackers'?'win':'lose'](); }
     else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; refreshShop(); hideOver(); }
   },
   close(){ banner('Disconnected - reload', '#fff'); },
 });
 
-function doJoin(){ const name=($('#name').value||'Hero').trim().slice(0,16)||'Hero'; net.send({t:'join', role:'player', name, class: preClass||'blaster'}); $('#join').style.display='none'; startLoop(); }
+function doJoin(){ Sound.init(); const name=($('#name').value||'Hero').trim().slice(0,16)||'Hero'; net.send({t:'join', role:'player', name, class: preClass||'blaster'}); $('#join').style.display='none'; startLoop(); }
 $('#go').onclick = doJoin; $('#name').addEventListener('keydown', e=>{ if(e.key==='Enter') doJoin(); });
-function renderWep(key){ const w=(weapons&&weapons[key])||{name:key,color:0xffffff}; const hex='#'+((w.color||0xffffff).toString(16).padStart(6,'0')); $('#weps').innerHTML=`<div class="wep" style="border-color:${hex}">${w.name}</div>`; }
+addEventListener('pointerdown', ()=>Sound.init(), {once:true});   // unlock audio on first tap (browser autoplay rule)
+function renderWep(key){ const w=(weapons&&weapons[key])||{name:key,color:0xffffff}; const hex='#'+((w.color||0xffffff).toString(16).padStart(6,'0')); $('#weps').innerHTML=`<div class="wep" style="border-color:${hex}">${w.name}</div>`; myAbility = ABILITIES[key] || ABILITIES.blaster; myAbilityAt = 0; $('#abilityBtn .an').textContent = myAbility.name; }
 
 // joystick (move)
 let moveId=null, mcx=0, mcy=0, moveX=0, moveY=0;
@@ -183,7 +187,8 @@ addEventListener('mousemove', e=>{ usingMouse=true; mouseNDC.x=(e.clientX/innerW
 addEventListener('mousedown', ()=>mouseDown=true); addEventListener('mouseup', ()=>mouseDown=false);
 
 setInterval(()=>{ if(!net.ready||myId==null||!myPos) return; net.send({t:'pos', x:+myPos.x.toFixed(2), z:+myPos.z.toFixed(2), a:facing}); }, 55);
-setInterval(()=>{ if(!net.ready) return; if(aiming||mouseDown||keys[' ']) net.send({t:'fire'}); }, 55);
+let lastShootSnd=0;
+setInterval(()=>{ if(!net.ready) return; if(aiming||mouseDown||keys[' ']){ net.send({t:'fire'}); const me=lastSnap&&lastSnap.players.find(p=>p[0]===myId); const cd=(weapons&&weapons[myWep]&&weapons[myWep].cd)||200; if(me&&me[6]&&lastSnap.phase==='combat'&&Date.now()-lastShootSnd>=cd){ lastShootSnd=Date.now(); Sound.shoot(myWep); } } }, 55);
 
 function angDiffAbs(a,b){ let d=Math.abs(a-b)%(Math.PI*2); return d>Math.PI?Math.PI*2-d:d; }
 function aimAssist(px,pz,base){ if(!lastSnap) return base; let bestAng=base, bestScore=Infinity; const cone=0.42, range=58;

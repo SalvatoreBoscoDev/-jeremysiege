@@ -133,7 +133,7 @@ export const WIZARD = {
 
 // ---- The 5 attacker weapons ----
 export const WEAPONS = {
-  blaster: { name: 'Shortbow',       dmg: 14, cd: 200,  speed: 65, pellets: 1, splash: 0,  arc: false, range: 72, color: 0xd8c290, desc: 'Rapid arrows' },
+  blaster: { name: 'Shortbow',       dmg: 18, cd: 190,  speed: 68, pellets: 1, splash: 0,  arc: false, range: 74, color: 0xd8c290, desc: 'Rapid arrows (starter)' },
   shotgun: { name: 'Throwing Axes',  dmg: 13, cd: 600,  speed: 60, pellets: 6, splash: 0,  arc: false, range: 40, color: 0xc2c6ce, desc: 'Tight spread of axes' },
   grenade: { name: 'Firebomb',       dmg: 42, cd: 1100, speed: 32, pellets: 1, splash: 6,  arc: true,  range: 50, color: 0xff7a2a, desc: 'Lobbed fire pot, big splash' },
   cannon:  { name: 'Heavy Crossbow', dmg: 38, cd: 650,  speed: 50, pellets: 1, splash: 4,  arc: false, range: 88, color: 0x9aa6b4, desc: 'Piercing bolt' },
@@ -154,7 +154,7 @@ export const PLAYER_COLORS = [
 
 // ---- Defend-Your-Castle: gate, rounds, economy, shop, towers ----
 export const GATE = { baseHp: 3500, hpPerPlayer: 500 };   // attackers smash this BEFORE they can hurt Jeremy
-export const ROUNDS = { count: 5, combatMs: 120000, intermissionMs: 60000 };
+export const ROUNDS = { count: 5, combatMs: 240000, intermissionMs: 60000 };
 export const GOLD = { start: 150, perKill: 10, perRoundBase: 120, perRoundPerPlayer: 6, perTroopKill: 6 };
 // Attackers buy ONE weapon (permanent) with personal gold earned from kills:
 export const WEAPON_BUY = { shotgun: 120, cannon: 150, grenade: 180, rocket: 300 };

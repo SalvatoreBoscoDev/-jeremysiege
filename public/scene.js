@@ -3,6 +3,7 @@
 // shadows + environment props make it feel less flat.
 import * as THREE from './vendor/three.module.js';
 import { LANE, POCKET, CAMP, HILL, WIZ_TOWER, WEAPONS, WEAPON_ORDER, FOREST, TREE, RAM, GATE, TOWER, CANNON } from './shared.js';
+import { Sound } from './sound.js';
 
 export function createWorld(canvas, opts = {}) {
   const labels = opts.labels !== false;
@@ -552,6 +553,19 @@ export function createWorld(canvas, opts = {}) {
     if (big) { const sm = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial({ color: 0x1c1c1c, transparent: true, opacity: 0.5 })); sm.position.set(x, 2.2, z); scene.add(sm); fxList.push({ m: sm, life: 0, max: 1.1, kind: 'puff' }); }
   }
   function spawnFx(f) {
+    switch (f.k) {   // procedural SFX for everyone (rate-limited inside Sound so 50 players don't become noise)
+      case 'boom': Sound.explosion(false); break;
+      case 'death': Sound.death(); break;
+      case 'troopdie': case 'troophit': case 'ramhitback': Sound.hit(); break;
+      case 'kingatk': Sound.kingAttack(f.kind); break;
+      case 'meteor': Sound.explosion(true); break;
+      case 'freeze': Sound.freeze(); break;
+      case 'rally': case 'wave': Sound.wave(); break;
+      case 'heal': Sound.heal(); break;
+      case 'chop': case 'treefell': Sound.chop(); break;
+      case 'mine': case 'minegold': Sound.mine(); break;
+      case 'ramimpact': Sound.explosion(true); break;
+    }
     if (['boom', 'wave'].includes(f.k)) {
       const cmap = { boom: f.c || 0xffaa33, kingatk: 0xff5500, meteor: 0xff3300, freeze: 0x55ccff, rally: 0xff66aa, wave: 0xff3344 };
       const r = f.r || (f.k === 'wave' ? 12 : 6);

@@ -38,25 +38,16 @@
 <div class="wrap">
   <div class="live"><b></b>LIVE — THE BATTLE IS RAGING</div>
   <h1>HUNT FOR<br>JEREMY</h1>
-  <p class="tag">Jeremy is the evil King. Grab your weapons, storm the castle, and take him down. You'll respawn — just keep charging!</p>
+  <p class="tag">Jeremy is the evil King. Everyone starts with a bow — earn gold from kills and buy a bigger weapon (axes, firebombs, crossbow, catapult) at the camp armory. You'll respawn — just keep charging!</p>
   <input id="name" placeholder="Enter your hero name" maxlength="16" autocomplete="off">
-  <div class="pick">CHOOSE YOUR CLASS</div>
-  <div id="classes"></div>
   <button id="go">⚔️ STORM THE CASTLE</button>
 </div>
 <div class="foot">A birthday battle • built for the party</div>
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
-import { WEAPONS, WEAPON_ORDER } from './shared.js';
 const $=s=>document.querySelector(s);
-// ---- class picker (each class = a starting weapon) ----
-let selClass = WEAPON_ORDER[0];
-const cbox = $('#classes');
-WEAPON_ORDER.forEach(k=>{ const w=WEAPONS[k]; const c=document.createElement('div'); c.className='cc'+(k===selClass?' sel':''); c.dataset.k=k;
-  c.innerHTML='<div class="cn">'+w.name+'</div><div class="cd">'+w.desc+'</div>';
-  c.onclick=()=>{ selClass=k; cbox.querySelectorAll('.cc').forEach(e=>e.classList.toggle('sel', e.dataset.k===k)); };
-  cbox.appendChild(c); });
+// Everyone starts as the basic archer (Shortbow) and buys a bigger weapon in-game at the camp armory.
 // Live game view behind the join form (lightweight; falls back to plain bg if WebGL is unavailable)
 try {
   const world = createWorld($('#c'), { quality:'low', labels:false });
@@ -77,7 +68,7 @@ try {
 } catch(e) {}
 
 const name = $('#name');
-const go = () => { const n=(name.value||'Hero').trim().slice(0,16)||'Hero'; location.href='/play?name='+encodeURIComponent(n)+'&class='+encodeURIComponent(selClass); };
+const go = () => { const n=(name.value||'Hero').trim().slice(0,16)||'Hero'; location.href='/play?name='+encodeURIComponent(n)+'&class=blaster'; };
 $('#go').onclick = go;
 name.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 name.focus();

@@ -96,6 +96,7 @@
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
 import { HILL, WIZ_TOWER, LANE, WIZARD } from './shared.js';
+import { Sound } from './sound.js';
 const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
 const THREE=world.THREE;
@@ -111,9 +112,10 @@ const net=connect({
   welcome(m){ spells=m.wizard.spells; shopCfg=m.shop; build(); buildShop(); buildDash(m.tuneMeta, m.tune); },
   roster(m){ world.setRoster(m.players); },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
-  event(ev){ if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='round') addFeed('Round '+ev.round); else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='gameover') addFeed(ev.result==='king'?'CASTLE HELD!':'King has fallen'); else if(ev.kind==='tune') syncDash(ev.tune); },
+  event(ev){ if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='round'){ addFeed('Round '+ev.round); Sound.round(); } else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='gameover'){ addFeed(ev.result==='king'?'CASTLE HELD!':'King has fallen'); Sound[ev.result==='king'?'win':'lose'](); } else if(ev.kind==='tune') syncDash(ev.tune); },
 });
-$('#enter').onclick=()=>{ net.join('wizard',($('#wname').value||'Marin').trim().slice(0,16)||'Marin'); world.setLocalWizard(); $('#overlay').style.display='none'; startLoop(); };
+$('#enter').onclick=()=>{ Sound.init(); net.join('wizard',($('#wname').value||'Marin').trim().slice(0,16)||'Marin'); world.setLocalWizard(); $('#overlay').style.display='none'; startLoop(); };
+addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='m' && document.activeElement.tagName!=='INPUT') Sound.toggleMute(); });
 $('#startBtn').onclick=()=>net.send({t:'start'}); $('#resetBtn').onclick=()=>net.send({t:'reset'}); $('#nextBtn').onclick=()=>net.send({t:'nextround'});
 // ---- host dashboard ----
 $('#dashToggle').onclick=()=>$('#dash').classList.toggle('open');

@@ -43,6 +43,7 @@
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
+import { Sound } from './sound.js';
 const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
 const THREE=world.THREE;
@@ -55,10 +56,10 @@ const net=connect({
   roster(m){ world.setRoster(m.players); window._att=m.count; },
   snapshot(m){ world.applySnapshot(m); updateHud(m); },
   event(ev){
-    if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866'; $('#bigsub').textContent=win?'The horde stormed the castle!':'Jeremy survived every round.'; $('#big').style.display='flex'; }
+    if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866'; $('#bigsub').textContent=win?'The horde stormed the castle!':'Jeremy survived every round.'; $('#big').style.display='flex'; Sound[win?'win':'lose'](); }
     else if(ev.kind==='reset') $('#big').style.display='none';
-    else if(ev.kind==='round') addFeed('ROUND '+ev.round+' / '+ev.total); else if(ev.kind==='intermission') addFeed('Intermission - shopping');
-    else if(ev.kind==='gatebreached') addFeed('GATE BREACHED!'); else if(ev.kind==='ramhit') addFeed('RAM SMASHES THE GATE!');
+    else if(ev.kind==='round'){ addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
+    else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='ramhit'){ addFeed('RAM SMASHES THE GATE!'); Sound.gateHit(); }
     else if(ev.kind==='death') addFeed('Crushed: '+ev.name); else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
     else if(ev.kind==='ramdeploy') addFeed('BATTERING RAM DEPLOYED!'); },
 });
@@ -82,6 +83,9 @@ function updateHud(m){
   $('#count').innerHTML=`${window._att||0} attackers · ${m.king.guards||0} guards<br>Castle ${(m.gold||0)}g · ${(m.towers||[]).length} towers<br>${ramLine} &nbsp;|&nbsp; \u{1FAB5} ${m.wood||0}/${m.woodNeeded||0} \u26cf\ufe0f ${m.iron||0}/${m.ironNeeded||0}`; }
 const feed=$('#feed'); const items=[]; function addFeed(t){ items.unshift(t); items.length=Math.min(10,items.length); feed.innerHTML=items.map(x=>`<div>${x}</div>`).join(''); }
 addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera)); world.resize(innerWidth,innerHeight,camera);
+// TV audio: browsers block sound until a user gesture — the operator clicks once to enable. M toggles mute.
+addEventListener('pointerdown', ()=>Sound.init(), {once:true});
+addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='m') Sound.toggleMute(); });
 </script>
 </body>
 </html>

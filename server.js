@@ -81,7 +81,7 @@ function aoeTroopsAt(x, z, radius, dmg, ownerId) { for (const tr of troops.value
 // Class active ability (Dash is handled client-side; the damage ones run here, trusting the client's cooldown).
 function playerAbility(id) {
   const p = players.get(id); if (!p || !p.alive || phase !== 'combat') return;
-  const ab = ABILITIES[p.cls]; if (!ab || ab.kind === 'dash') return;
+  const ab = ABILITIES[p.wep]; if (!ab || ab.kind === 'dash') return;   // ability follows the equipped WEAPON (buy a weapon = its class ability)
   const t = now(); if (t - (p.abilityAt || 0) < ab.cd) return; p.abilityAt = t;
   const dm = dmgMult(p);
   if (ab.kind === 'whirl') { aoeTroopsAt(p.x, p.z, ab.radius, ab.dmg * dm, id); fxQueue.push({ k: 'boom', x: p.x, z: p.z, r: ab.radius, c: 0xffaa33 }); }
