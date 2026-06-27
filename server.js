@@ -398,7 +398,7 @@ function kingAttack(id, kind, tx, tz) {
   if (clients.get(id)?.role !== 'king' || phase !== 'combat' || !king.alive) return;
   const cfg = KING.attacks[kind]; if (!cfg) return; const t = now(); const cdMult = Math.max(0.5, 1 - 0.12 * king.up.swift); if (t - king.cd[kind] < cfg.cd * cdMult) return; king.cd[kind] = t;
   fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Summon Wave' }[kind] || kind), color: 0xffd23f });
-  if (kind === 'summon') { spawnWave(waveSize()); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }
+  if (kind === 'summon') { const cap = Math.min(WAVE.maxAliveHardCap, guardCount() + cfg.burst); spawnWave(cfg.burst, cap, cfg.hpBonus || 0); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }
   if (kind === 'laser') {
     // Delayed line beam: aim a ray from the King toward the click, telegraph it now, fire after cfg.delay.
     let dx = (+tx || king.x) - king.x, dz = (+tz || (king.z + 1)) - king.z; const dlen = Math.hypot(dx, dz) || 1; dx /= dlen; dz /= dlen;
@@ -448,7 +448,7 @@ function fireLaser(L) {
 // ---------- troops ----------
 function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
 function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
-function spawnWave(n) { if (NO_TROOPS) return; const room = maxAlive() - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
+function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
@@ -463,6 +463,7 @@ function resetGame() {
 
 // ---------- tick ----------
 let last = Date.now();
+let lastSnapAt = 0; const SNAP_MS = 66;   // broadcast snapshots ~15Hz; the sim still runs every tick and clients interpolate, so it stays smooth at ~30% less bandwidth
 let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now(), snapN = 0;
 setInterval(() => { try {
   const _hStart = performance.now();
@@ -588,9 +589,10 @@ setInterval(() => { try {
   }
   projectiles = keep;
 
+  if (t - lastSnapAt >= SNAP_MS) { lastSnapAt = t;
   const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i, p.general ? 1 : 0, t < (p.rallyUntil || 0) ? 1 : 0, p.gen]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
-  const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1), +(tr.hp / TROOP.hp).toFixed(2)]);
+  const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]);   // client only reads id,x,z — hp fraction was dead weight
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
   const trees_ = sendWorld ? [...trees.values()].filter(tr => tr.alive).map(tr => [tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]) : null;
   const iron_  = sendWorld ? [...irons.values()].filter(o => o.alive).map(o => [o.id, +o.x.toFixed(1), +o.z.toFixed(1)]) : null;
@@ -613,6 +615,7 @@ setInterval(() => { try {
     towers: towers.map(tw => [tw.x, tw.z]),
     fx: fxQueue.splice(0, fxQueue.length),
   });
+  }
   const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
   if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }
 } catch (e) { console.error('[tick error]', e && e.stack || e); } }, TICK_MS);
