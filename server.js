@@ -494,9 +494,15 @@ setInterval(() => { try {
   }
 
   if (combat) for (const tr of troops.values()) {
-    // nearest live attacker (archers shoot this; also a melee candidate)
-    let tp = null, pbest = Infinity;
-    for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tr.x) ** 2 + (p.z - tr.z) ** 2; if (d < pbest) { pbest = d; tp = p; } }
+    // STICKY target: keep chasing the same attacker; only re-pick every 500ms or when it dies. Re-picking the nearest EVERY tick made troops flip targets and zigzag — that was the jerkiness.
+    let tp = tr.tgtId != null ? players.get(tr.tgtId) : null;
+    if (tp && !tp.alive) tp = null;
+    if (!tp || t - (tr.retgt || 0) > 500) {
+      tr.retgt = t; let best = Infinity, np = null;
+      for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tr.x) ** 2 + (p.z - tr.z) ** 2; if (d < best) { best = d; np = p; } }
+      tp = np; tr.tgtId = np ? np.id : null;
+    }
+    const pbest = tp ? (tp.x - tr.x) ** 2 + (tp.z - tr.z) ** 2 : Infinity;
     if (tr.kind === 'archer') {
       // ARCHER: hang back and loose arrows at the nearest attacker; advance only to stay in range.
       const dx = tp ? tp.x - tr.x : 0, dz = tp ? tp.z - tr.z : -1, d = Math.hypot(dx, dz) || 1;
@@ -520,8 +526,11 @@ setInterval(() => { try {
   }
   // Keep troops from piling onto one tile (a stack reads as a single super-unit that hits all at once).
   if (combat && troops.size > 1) { const TSEP = 1.7, arr = [...troops.values()];
-    for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) { const A = arr[a], B = arr[b], sdx = B.x - A.x, sdz = B.z - A.z, sd = sdx * sdx + sdz * sdz; if (sd < TSEP * TSEP && sd > 0.0004) { const dist = Math.sqrt(sd), push = (TSEP - dist) * 0.5, ux = sdx / dist, uz = sdz / dist; A.x -= ux * push; A.z -= uz * push; B.x += ux * push; B.z += uz * push; } }
-    for (const tr of arr) { const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
+    // Accumulate all separation pushes, THEN apply a damped, capped fraction once. The old in-place sequential push was order-dependent and oscillated frame-to-frame — that read as jitter.
+    for (const tr of arr) { tr._sx = 0; tr._sz = 0; }
+    for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) { const A = arr[a], B = arr[b], sdx = B.x - A.x, sdz = B.z - A.z, sd = sdx * sdx + sdz * sdz; if (sd < TSEP * TSEP && sd > 0.0004) { const dist = Math.sqrt(sd), push = (TSEP - dist), ux = sdx / dist, uz = sdz / dist; A._sx -= ux * push; A._sz -= uz * push; B._sx += ux * push; B._sz += uz * push; } }
+    const cap = TROOP.speed * dt * 0.8;
+    for (const tr of arr) { let px = tr._sx * 0.25, pz = tr._sz * 0.25; const pm = Math.hypot(px, pz); if (pm > cap) { px = px / pm * cap; pz = pz / pm * cap; } tr.x += px; tr.z += pz; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
   }
 
   // Friendly troops (from a built troop camp): fight nearby enemies, else march to the gate and chip it.
