@@ -40,6 +40,15 @@
   #abilityBtn.ready { border-color:var(--green); box-shadow:0 0 22px #9be36a77,0 6px 20px rgba(0,0,0,.45); }
   #abilityBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.66); pointer-events:none; }
   #abilityBtn .an { position:relative; font-size:13px; line-height:1.1; padding:0 4px; letter-spacing:.3px; } #abilityBtn .ak { position:relative; font-size:10px; opacity:.7; letter-spacing:1px; }
+  #cmdBtn { position:fixed; bottom:128px; left:50%; transform:translateX(-50%); width:76px; height:76px; border-radius:50%; background:radial-gradient(circle at 50% 38%,rgba(70,40,90,.85),rgba(20,8,30,.7)); border:3px solid var(--gold); color:#fff; font-weight:900; text-align:center; display:none; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; box-shadow:0 0 22px #ffd23f55,0 6px 18px rgba(0,0,0,.5); z-index:6; }
+  #cmdBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.62); pointer-events:none; }
+  #cmdBtn .cn { position:relative; font-size:20px; } #cmdBtn .ct { position:relative; font-size:10px; letter-spacing:.5px; }
+  #vote { position:fixed; left:0; right:0; bottom:150px; z-index:8; display:none; flex-direction:column; align-items:center; gap:9px; padding:0 12px; pointer-events:auto; }
+  #vote .vt { font-size:15px; font-weight:900; letter-spacing:.5px; color:var(--gold); text-shadow:0 2px 6px #000; }
+  #vote .vc { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  #vote .cand { min-width:92px; background:linear-gradient(180deg,rgba(40,28,60,.92),rgba(14,10,24,.92)); border:2px solid var(--glass-bd); border-radius:14px; padding:10px 12px; font-weight:800; text-align:center; cursor:pointer; box-shadow:var(--shadow); }
+  #vote .cand.mine { border-color:var(--gold); box-shadow:0 0 16px #ffd23f66; }
+  #vote .cand .nm { font-size:14px; } #vote .cand .vn { font-size:12px; opacity:.85; margin-top:3px; color:var(--gold); }
   #respawn { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; background:radial-gradient(circle at 50% 45%,rgba(150,0,0,.4),rgba(40,0,0,.55)); z-index:5; }
   #respawn .t { font-size:42px; font-weight:900; letter-spacing:2px; text-shadow:0 2px 12px #000; }
   #banner { position:fixed; top:42%; left:0; right:0; text-align:center; pointer-events:none; z-index:6; }
@@ -93,6 +102,8 @@
 <div id="aimStick" class="stick"><div id="aimNub" class="nub"></div><div class="lbl">FIRE</div></div>
 <div id="chipChop"></div>
 <div id="abilityBtn"><div class="cdfill"></div><div class="an">—</div><div class="ak">Q</div></div>
+<div id="cmdBtn"><div class="cdfill"></div><div class="cn">👑</div><div class="ct">RALLY</div></div>
+<div id="vote"></div>
 <div id="banner"><span id="bannerTxt"></span></div>
 <div id="armory"></div>
 <div id="cosmetics"></div>
@@ -128,7 +139,20 @@ const params = new URLSearchParams(location.search); const preName = params.get(
 if (preName) $('#name').value = preName;
 let myAbility = ABILITIES[preClass] || ABILITIES.blaster;   // active ability FOLLOWS the equipped weapon (buy a weapon = its ability)
 let myAbilityAt = 0, dashUntil = 0;
+let myVote=null, cmdAt=0; const CMD_CD=22000;   // General vote choice + Rally command cooldown (mirrors server)
 $('#abilityBtn .an').textContent = myAbility.name;
+function useCommand(){
+  if(!net.ready || !lastSnap || lastSnap.phase!=='combat' || lastSnap.general!==myId) return;
+  const t=Date.now(); if(t-cmdAt<CMD_CD) return; cmdAt=t;
+  net.send({t:'command'}); Sound.ability(); banner('RALLY! Nearby allies buffed', '#ffd23f', 1100);
+}
+function renderVote(m){
+  const v=$('#vote'); const show = m.phase==='lobby' && m.ballot && m.ballot.length;
+  v.style.display = show?'flex':'none'; if(!show) return;
+  v.innerHTML = '<div class="vt">👑 VOTE YOUR GENERAL</div><div class="vc">' +
+    m.ballot.map(([cid,name,tally])=>`<div class="cand${myVote===cid?' mine':''}" data-c="${cid}"><div class="nm">${name}</div><div class="vn">${tally} vote${tally===1?'':'s'}</div></div>`).join('') + '</div>';
+  v.querySelectorAll('.cand').forEach(c=>c.onclick=()=>{ myVote=+c.dataset.c; net.send({t:'vote',cand:myVote}); Sound.buy(); });
+}
 function useAbility(){
   if(!net.ready || myId==null || !lastSnap || lastSnap.phase!=='combat') return;
   const me = lastSnap.players.find(p=>p[0]===myId); if(!me || !me[6]) return;
@@ -142,7 +166,7 @@ const net = connect({
   open(){ if (preName) doJoin(); },
   welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; cosmeticsCat=m.cosmetics; cosmeticSlots=m.cosmeticSlots||[]; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); buildCosmetics(); },
   roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
-  snapshot(m){ lastSnap=m; world.applySnapshot(m); updateHud(m); },
+  snapshot(m){ lastSnap=m; world.applySnapshot(m); if(world.setGeneral) world.setGeneral(m.general); updateHud(m); },
   event(ev){
     if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
     else if(ev.kind==='intermission'){ banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600); Sound.intermission(); }
@@ -151,8 +175,10 @@ const net = connect({
     else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); Sound.buy(); }
     else if(ev.kind==='boughtcosmetic'){ myCos[ev.slot]=ev.id; myCosOwned=ev.owned||myCosOwned; if(typeof ev.gold==='number') myGold=ev.gold; refreshCosmetics(); banner('Looking good!','#ff8ad6',800); Sound.buy(); }
     else if(ev.kind==='built'){ Sound.build(); }
-    else if(ev.kind==='gameover'){ showOver(ev.result); Sound[ev.result==='attackers'?'win':'lose'](); }
-    else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; refreshShop(); hideOver(); }
+    else if(ev.kind==='general'){ banner((ev.name||'A hero')+' is crowned GENERAL! 👑', '#ffd23f', 2600); Sound.round(); }
+    else if(ev.kind==='rally'){ if(ev.name) banner(ev.name+' rallies the troops!', '#ffd23f', 1100); Sound.wave(); }
+    else if(ev.kind==='gameover'){ showOver(ev.result, ev); Sound[ev.result==='attackers'?'win':'lose'](); }
+    else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; myVote=null; cmdAt=0; refreshShop(); hideOver(); }
   },
   close(){ banner('Disconnected - reload', '#fff'); },
 });
@@ -184,6 +210,7 @@ const mouseNDC=new THREE.Vector2(), ray=new THREE.Raycaster(), groundPlane=new T
 addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true); addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 addEventListener('keydown', e=>{ if(e.key.toLowerCase()==='q') useAbility(); });
 { const ab=$('#abilityBtn'); ab.addEventListener('touchstart', e=>{ e.preventDefault(); useAbility(); }, {passive:false}); ab.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation(); useAbility(); }); }
+{ const cb=$('#cmdBtn'); cb.addEventListener('touchstart', e=>{ e.preventDefault(); useCommand(); }, {passive:false}); cb.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation(); useCommand(); }); }
 addEventListener('mousemove', e=>{ usingMouse=true; mouseNDC.x=(e.clientX/innerWidth)*2-1; mouseNDC.y=-(e.clientY/innerHeight)*2+1; });
 addEventListener('mousedown', ()=>mouseDown=true); addEventListener('mouseup', ()=>mouseDown=false);
 
@@ -211,7 +238,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       // CLIENT-AUTHORITATIVE: simulate my own movement locally so input feels instant.
       let ix=moveX, iy=moveY; if(keys['a'])ix=-1; if(keys['d'])ix=1; if(keys['w'])iy=-1; if(keys['s'])iy=1;
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
-      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1);
+      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1)*(me[13]?1.25:1);
       myPos.x+=ix*spd*dt; myPos.z+=iy*spd*dt;
       const gdown = !(lastSnap.gate && lastSnap.gate.hp>0 && !lastSnap.gate.open);   // gate smashed OR Jeremy sallied it open
       [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z, gdown ? LANE.duelZ : undefined);
@@ -227,6 +254,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
     camera.position.set(px,17+gy,pz+19); camera.lookAt(px,1.5+gy,pz-13);
   } else { camera.position.set(0,34,70); camera.lookAt(0,0,0); }
   { const frac=Math.min(1,(Date.now()-myAbilityAt)/myAbility.cd); const ab=$('#abilityBtn'); ab.firstElementChild.style.height=((1-frac)*100)+'%'; ab.classList.toggle('ready', frac>=1); }
+  { const isGen=lastSnap&&lastSnap.general===myId; const cb=$('#cmdBtn'); cb.style.display=(isGen&&lastSnap.phase==='combat')?'flex':'none'; if(isGen){ const cf=Math.min(1,(Date.now()-cmdAt)/CMD_CD); cb.firstElementChild.style.height=((1-cf)*100)+'%'; cb.classList.toggle('ready', cf>=1); } }
   world.render(camera); requestAnimationFrame(loop);
 }
 
@@ -252,6 +280,7 @@ function updateHud(m){
     if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
     myGold = gold||0;
     $('#respawn').style.display = alive?'none':'flex';
+    renderVote(m);
     const rs=m.ramSite;
     // Build sites take PRIORITY over chop/mine prompts (mirror the server) so being beside ore/trees can't hijack a dump or treb-fire.
     let onBuild=false, nearRam=null, nearBuild=null, trebChip='';
@@ -314,9 +343,12 @@ function buildCosmetics(){ if(!cosmeticsCat||!cosmeticSlots.length) return; cons
   refreshCosmetics();
 }
 function refreshCosmetics(){ document.querySelectorAll('#cosmetics .ci').forEach(c=>{ const slot=c.dataset.slot, id=c.dataset.id, cost=+c.dataset.cost; const equipped=myCos[slot]===id; const owned=cost===0||myCosOwned.includes(slot+':'+id); c.classList.toggle('on',equipped); c.classList.toggle('owned',owned&&!equipped); c.classList.toggle('poor', !owned && myGold<cost); }); }
-function showOver(res){ const win = res==='attackers'; $('#over').style.display='flex'; $('#over').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')';
+function showOver(res, ev){ const win = res==='attackers'; $('#over').style.display='flex'; $('#over').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')';
   $('#overTxt').textContent = win?'JEREMY HAS FALLEN!':'THE CASTLE HELD'; $('#overTxt').style.color=win?'#aaff66':'#ff8866';
-  $('#overSub').textContent = win?'You stormed the castle and took down the King!':'Jeremy survived all the rounds. Better luck next siege!'; }
+  let sub = win?'You stormed the castle and took down the King!':'Jeremy survived all the rounds. Better luck next siege!';
+  if(ev && ev.mvp) sub += `<br><br><span style="color:#ffd23f;font-weight:900">🏆 MVP: ${ev.mvp.name} — ${ev.mvp.kills} kills</span>`;
+  if(ev && ev.general) sub += `<br><span style="color:#ffd23f">👑 General: ${ev.general}</span>`;
+  $('#overSub').innerHTML = sub; }
 function hideOver(){ $('#over').style.display='none'; }
 addEventListener('resize', ()=>world.resize(innerWidth,innerHeight,camera)); world.resize(innerWidth,innerHeight,camera);
 </script>

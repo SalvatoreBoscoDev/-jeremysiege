@@ -26,6 +26,20 @@
   @keyframes feedin { from{opacity:0; transform:translateX(-10px)} to{opacity:1; transform:none} }
   #big { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; background:radial-gradient(circle at 50% 40%,#1d3a1dcc,#0a0e0aee); z-index:5; }
   #big h1 { font-size:76px; font-weight:900; letter-spacing:2px; color:#aaff66; text-shadow:0 3px 20px #000; } #big p { font-size:26px; opacity:.92; text-shadow:0 2px 8px #000; }
+  #big .mvp { font-size:32px; font-weight:900; color:#ffd23f; margin-top:10px; } #big .board { font-size:20px; line-height:1.65; opacity:.95; margin-top:8px; }
+  #lead { position:absolute; right:26px; top:120px; width:252px; background:linear-gradient(180deg,#00000090,#00000055); border:1px solid #ffffff1f; border-radius:14px; padding:12px 14px; box-shadow:0 10px 30px #0007; display:none; }
+  #lead .lh { font-size:13px; font-weight:900; letter-spacing:2.5px; color:#ffd23f; margin-bottom:8px; text-align:center; }
+  #lead .lr { display:flex; justify-content:space-between; gap:8px; font-size:16px; font-weight:700; padding:4px 6px; border-radius:7px; }
+  #lead .lr:nth-child(2) { background:#ffd23f22; }
+  #lead .lr .ln { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } #lead .lr .lk { color:#ffd23f; font-weight:900; }
+  #ballot { position:absolute; left:50%; top:118px; transform:translateX(-50%); display:none; text-align:center; background:linear-gradient(180deg,#1a1233ee,#0a0712ee); border:2px solid #ffd23f66; border-radius:20px; padding:18px 26px; box-shadow:0 16px 48px #000b; }
+  #ballot .bt { font-size:26px; font-weight:900; letter-spacing:1px; color:#ffd23f; }
+  #ballot .bs { font-size:15px; opacity:.8; margin:4px 0 14px; }
+  #ballot .bc { display:flex; gap:16px; justify-content:center; }
+  #ballot .bcd { min-width:120px; background:linear-gradient(180deg,#ffffff14,#00000066); border:2px solid #ffffff2e; border-radius:14px; padding:12px 16px; }
+  #ballot .bcd .bn { font-size:18px; font-weight:900; } #ballot .bcd .bv { font-size:30px; font-weight:900; color:#ffd23f; }
+  #crown { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:radial-gradient(circle at 50% 40%,#2a1c40dd,#0a0c14ee); z-index:6; }
+  #crown h1 { font-size:66px; font-weight:900; color:#ffd23f; text-shadow:0 3px 22px #000; } #crown p { font-size:26px; opacity:.92; }
 </style>
 </head>
 <body>
@@ -36,8 +50,11 @@
   <div id="count">0 attackers<br>0 guards</div>
   <div id="feed"></div>
   <div id="qrcard"><div class="j">SCAN TO JOIN</div><img id="qr" alt="join QR"><div class="u" id="url">...</div><div class="h">or type it into any phone browser</div></div>
+  <div id="lead"></div>
+  <div id="ballot"></div>
 </div>
 <div id="big"><h1 id="bigh">JEREMY HAS FALLEN!</h1><p id="bigsub"></p></div>
+<div id="crown"><h1>👑 GENERAL CROWNED</h1><p id="crownName"></p></div>
 
 <script src="./vendor/qrcode.js"></script>
 <script type="module">
@@ -54,16 +71,28 @@ try { const qr=qrcode(0,'M'); qr.addData(joinUrl); qr.make(); $('#qr').src=qr.cr
 
 const net=connect({
   roster(m){ world.setRoster(m.players); window._att=m.count; },
-  snapshot(m){ world.applySnapshot(m); updateHud(m); },
+  snapshot(m){ world.applySnapshot(m); updateHud(m); renderLead(m); renderBallot(m); },
   event(ev){
-    if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866'; $('#bigsub').textContent=win?'The horde stormed the castle!':'Jeremy survived every round.'; $('#big').style.display='flex'; Sound[win?'win':'lose'](); }
-    else if(ev.kind==='reset') $('#big').style.display='none';
+    if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866';
+      let html=win?'The horde stormed the castle!':'Jeremy survived every round.';
+      if(ev.mvp) html+=`<div class="mvp">🏆 MVP: ${ev.mvp.name} — ${ev.mvp.kills} kills</div>`;
+      if(ev.board&&ev.board.length) html+='<div class="board">'+ev.board.slice(0,5).map((b,i)=>`${i+1}. ${b.general?'👑 ':''}${b.name} — ${b.kills}k / ${b.deaths}d`).join('<br>')+'</div>';
+      $('#bigsub').innerHTML=html; $('#big').style.display='flex'; Sound[win?'win':'lose'](); }
+    else if(ev.kind==='general'){ $('#crownName').textContent=(ev.name||'A hero')+' leads the siege!'; $('#crown').style.display='flex'; setTimeout(()=>$('#crown').style.display='none', 4500); addFeed('👑 '+(ev.name||'A hero')+' elected General'); Sound.round(); }
+    else if(ev.kind==='reset'){ $('#big').style.display='none'; $('#crown').style.display='none'; }
     else if(ev.kind==='round'){ addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
     else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='ramhit'){ addFeed('RAM SMASHES THE GATE!'); Sound.gateHit(); }
     else if(ev.kind==='death') addFeed('Crushed: '+ev.name); else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
     else if(ev.kind==='ramdeploy') addFeed('BATTERING RAM DEPLOYED!'); },
 });
 net.join('screen','TV');
+let lastLead=null;
+function renderLead(m){ if(m.lead) lastLead=m.lead; const L=$('#lead');
+  if((m.phase!=='combat'&&m.phase!=='intermission')||!lastLead||!lastLead.length){ L.style.display='none'; return; }
+  L.style.display='block'; L.innerHTML='<div class="lh">TOP HEROES</div>'+lastLead.map(([name,kills,gold,isGen])=>`<div class="lr"><span class="ln">${isGen?'👑 ':''}${name}</span><span class="lk">${kills}</span></div>`).join(''); }
+function renderBallot(m){ const B=$('#ballot');
+  if(m.phase==='lobby'&&m.ballot&&m.ballot.length){ B.style.display='block'; B.innerHTML='<div class="bt">👑 VOTE YOUR GENERAL</div><div class="bs">Tap a name on your phone</div><div class="bc">'+m.ballot.map(([cid,name,tally])=>`<div class="bcd"><div class="bn">${name}</div><div class="bv">${tally}</div></div>`).join('')+'</div>'; }
+  else B.style.display='none'; }
 
 let lastT=performance.now();
 function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);

@@ -120,6 +120,12 @@ const interMs = TEST_INT_MS != null ? TEST_INT_MS : ROUNDS.intermissionMs;
 const gate = { hp: 0, maxHp: 0 };
 const king = { x: 0, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: 0, maxHp: 0, alive: true, cd: { slam: 0, cannon: 0, sweep: 0, summon: 0 }, gateOpen: false, up: { might: 0, swift: 0, reach: 0 } };
 let wizard = null;
+// ---- General (elected commander) + lobby vote ----
+const GEN = { hpMult: 1.8, weapon: 'shotgun', cmdCd: 22000, radius: 34, rallyDur: 6000, rallyHeal: 45, rallyDmg: 1.3, rallySpeed: 1.25 };
+let general = null;          // elected General's player id (lasts the whole game)
+let ballot = [];             // up to 3 candidate ids for the lobby vote
+const votes = new Map();     // voterId -> candidateId
+let cmdCd = 0;               // General's Rally command cooldown stamp
 
 const attackerCount = () => players.size;
 const gateUp = () => gate.hp > 0 && !king.gateOpen;   // King vulnerable when the gate is smashed OR he has it open to sally
@@ -140,8 +146,8 @@ function applyTune(k) {   // live-apply HP changes mid-match, preserving the cur
 function guardCount() { let n = 0; for (const t of troops.values()) if (t.hp > 0) n++; return n; }
 function woodNeeded() { return TEST_WOOD != null ? TEST_WOOD : clamp(Math.round(RAM.woodNeededBase + RAM.woodNeededPerPlayer * attackerCount()), RAM.woodNeededBase, RAM.woodNeededMax); }
 function ironNeeded() { return TEST_IRON != null ? TEST_IRON : clamp(Math.round(RAM.ironNeededBase + RAM.ironNeededPerPlayer * attackerCount()), RAM.ironNeededBase, RAM.ironNeededMax); }
-function effMaxHp(p) { return PLAYER.maxHp + p.perks.tough * PERK_FX.hp; }
-function dmgMult(p) { return 1 + p.perks.dmg * PERK_FX.dmg; }
+function effMaxHp(p) { return (PLAYER.maxHp + p.perks.tough * PERK_FX.hp) * (p.general ? GEN.hpMult : 1); }
+function dmgMult(p) { return (1 + p.perks.dmg * PERK_FX.dmg) * (now() < (p.rallyUntil || 0) ? GEN.rallyDmg : 1); }
 function speedMult(p) { return 1 + p.perks.swift * PERK_FX.speed; }
 function respawnDelay(p) { return Math.max(1200, PLAYER.respawnMs - p.perks.respawn * PERK_FX.respawnMs); }
 
@@ -151,12 +157,12 @@ initForest(); initIron(); recomputeDefenses();
 function nearestNode(map, x, z, rad) { let best = null, bd = Infinity; for (const n of map.values()) { if (!n.alive) continue; const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd) { bd = d; best = n; } } return best && bd <= rad * rad ? best : null; }
 
 function playerSpawn() { return [(Math.random() - 0.5) * 16, LANE.playerSpawnZ - Math.random() * 6]; }   // center-back of the camp
-function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
+function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, general: false, rallyUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => { const id = nextId++; try { ws._socket.setNoDelay(true); } catch {}   /* disable Nagle so 22Hz snapshots flush immediately, not in bursts */ ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } handleMessage(id, ws, m); }); ws.on('close', () => removeClient(id)); });
-function removeClient(id) { const c = clients.get(id); clients.delete(id); players.delete(id); if (c && c.role === 'wizard') wizard = null; recomputeDefenses(); broadcastRoster(); }
+function removeClient(id) { const c = clients.get(id); clients.delete(id); players.delete(id); if (c && c.role === 'wizard') wizard = null; if (id === general) general = null; recomputeDefenses(); broadcastRoster(); }
 const send = (ws, o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
 function broadcast(o) { const s = JSON.stringify(o); for (const c of clients.values()) if (c.ws.readyState === 1) c.ws.send(s); }
 const isDefender = (id) => ['king', 'wizard'].includes(clients.get(id)?.role);
@@ -180,6 +186,8 @@ function handleMessage(id, ws, m) {
     case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz, (!gateUp() && phase === 'combat') ? LANE.duelZ : undefined); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
     case 'fire': playerFire(id); break;
     case 'ability': playerAbility(id); break;
+    case 'command': { if (id !== general) break; const p = players.get(id); if (!p || !p.alive || phase !== 'combat') break; const t = now(); if (t - cmdCd < GEN.cmdCd) break; cmdCd = t; rallyCommand(p); break; }
+    case 'vote': { if (phase !== 'lobby' || !players.has(id)) break; const c = +m.cand; if (!ballot.includes(c)) break; votes.set(id, c); break; }
     case 'kmove': { if (clients.get(id)?.role !== 'king') return; king.mx = clamp(+m.mx || 0, -1, 1); king.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') king.a = m.a; break; }
     case 'wmove': { if (clients.get(id)?.role !== 'wizard' || !wizard) return; wizard.mx = clamp(+m.mx || 0, -1, 1); wizard.mz = clamp(+m.mz || 0, -1, 1); if (typeof m.a === 'number') wizard.a = m.a; break; }
     // Client-authoritative King / Wizard position (same approach as players), clamped to their roam area.
@@ -207,8 +215,35 @@ function broadcastRoster() {
   broadcast({ t: 'roster', players: roster, kingName: kingC?.name || null, wizardName: wizC?.name || null, count: roster.length });
 }
 
+// ---------- General vote / election ----------
+function tallyFor(cid) { let n = 0; for (const v of votes.values()) if (v === cid) n++; return n; }
+function ensureBallot() {
+  ballot = ballot.filter(cid => players.has(cid));   // drop candidates who left
+  const pool = [...players.keys()].filter(id => !ballot.includes(id));
+  while (ballot.length < Math.min(3, players.size) && pool.length) ballot.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+}
+function electGeneral() {
+  const pool = ballot.filter(cid => players.has(cid));
+  if (!pool.length) { general = null; return; }
+  let bestN = -1; for (const cid of pool) bestN = Math.max(bestN, tallyFor(cid));
+  const top = pool.filter(cid => tallyFor(cid) === bestN);   // tie / no votes -> random among the leaders
+  general = top[Math.floor(Math.random() * top.length)];
+  const gp = players.get(general);
+  if (gp) { gp.general = true; if (WEAPON_ORDER.includes(GEN.weapon)) gp.wep = GEN.weapon; gp.hp = effMaxHp(gp); }
+  broadcast({ t: 'ev', kind: 'general', id: general, name: clients.get(general)?.name || 'General' });
+  broadcastRoster();
+}
+function rallyCommand(g) {
+  const t = now();
+  for (const p of players.values()) if (p.alive && Math.hypot(p.x - g.x, p.z - g.z) <= GEN.radius) { p.rallyUntil = t + GEN.rallyDur; p.hp = Math.min(effMaxHp(p), p.hp + GEN.rallyHeal); }
+  fxQueue.push({ k: 'rally', x: g.x, z: g.z });
+  fxQueue.push({ k: 'castlabel', x: g.x, z: g.z, y: 10, text: (clients.get(g.id)?.name || 'General') + ': RALLY!', color: 0xffd23f });
+  broadcast({ t: 'ev', kind: 'rally', name: clients.get(g.id)?.name || 'General' });
+}
+
 // ---------- rounds ----------
 function startRound(n) {
+  if (n === 1 && !general) electGeneral();   // crown the voted General as the game begins
   round = n; phase = 'combat'; phaseEndsAt = now() + combatMs; lastWaveAt = now();
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; }
   ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };   // fresh ram frame each round
@@ -223,7 +258,11 @@ function endRoundToIntermission() {
   phase = 'intermission'; phaseEndsAt = now() + interMs;
   broadcast({ t: 'ev', kind: 'intermission', round, gold });
 }
-function endGame(who) { phase = 'over'; result = who; phaseEndsAt = now() + 14000; broadcast({ t: 'ev', kind: 'gameover', result: who }); }   // auto-return to lobby ~14s later
+function endGame(who) {
+  phase = 'over'; result = who; phaseEndsAt = now() + 14000;   // auto-return to lobby ~14s later
+  const board = [...players.values()].map(p => ({ name: clients.get(p.id)?.name || '???', kills: p.kills, deaths: p.deaths, gold: p.gold, general: p.general ? 1 : 0 })).sort((a, b) => (b.kills - a.kills) || (b.gold - a.gold)).slice(0, 8);
+  broadcast({ t: 'ev', kind: 'gameover', result: who, board, mvp: board[0] || null, general: general ? (clients.get(general)?.name || 'General') : null });
+}
 function buy(item) {
   if (phase !== 'intermission') return;
   const cfg = SHOP[item]; if (!cfg || gold < cfg.cost) return;
@@ -387,11 +426,12 @@ function spawnWave(n) { if (NO_TROOPS) return; const room = maxAlive() - guardCo
 
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
+  general = null; ballot = []; votes.clear();
   gold = TEST_GOLD != null ? TEST_GOLD : GOLD.start;
   king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, sweep: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 };
   projectiles = []; troops.clear(); friendlies.clear(); initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
   if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
-  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; }
+  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; }
   recomputeDefenses(); broadcast({ t: 'ev', kind: 'reset' });
 }
 
@@ -403,6 +443,7 @@ setInterval(() => {
   const t = now(); const dt = Math.min(0.1, (t - last) / 1000); last = t;
   if (wizard) wizard.mana = Math.min(WIZARD.maxMana, wizard.mana + WIZARD.manaRegen * dt);
   const combat = phase === 'combat';
+  if (phase === 'lobby') ensureBallot();
   if (combat && t >= phaseEndsAt && king.alive) endRoundToIntermission();
   else if (phase === 'intermission' && t >= phaseEndsAt) startRound(round + 1);
   else if (phase === 'over' && t >= phaseEndsAt) resetGame();   // after game over, auto-return to lobby so the next match can start
@@ -518,19 +559,22 @@ setInterval(() => {
   }
   projectiles = keep;
 
-  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i]);
+  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i, p.general ? 1 : 0, t < (p.rallyUntil || 0) ? 1 : 0]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
   const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1), +(tr.hp / TROOP.hp).toFixed(2)]);
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
   const trees_ = sendWorld ? [...trees.values()].filter(tr => tr.alive).map(tr => [tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]) : null;
   const iron_  = sendWorld ? [...irons.values()].filter(o => o.alive).map(o => [o.id, +o.x.toFixed(1), +o.z.toFixed(1)]) : null;
+  const lead_  = sendWorld ? [...players.values()].map(p => [clients.get(p.id)?.name || '???', p.kills, p.gold, p.general ? 1 : 0]).sort((a, b) => (b[1] - a[1]) || (b[2] - a[2])).slice(0, 5) : null;
   broadcast({
     t: 's', phase, round, roundsTotal, result,
     timeLeft: (phase === 'combat' || phase === 'intermission') ? Math.max(0, phaseEndsAt - t) : 0,
     gold, gate: { hp: Math.round(gate.hp), maxHp: Math.round(gate.maxHp), open: king.gateOpen ? 1 : 0 },
     king: { x: +king.x.toFixed(1), z: +king.z.toFixed(1), a: +king.a.toFixed(2), hp: Math.round(king.hp), maxHp: king.maxHp, alive: king.alive ? 1 : 0, vulnerable: (!up && combat) ? 1 : 0, guards: guardCount(), up: king.up },
     wizard: wizard ? { mana: Math.round(wizard.mana), x: +wizard.x.toFixed(1), z: +wizard.z.toFixed(1), a: +wizard.a.toFixed(2) } : null,
-    players: ps, proj: prj, troops: trp, ...(sendWorld ? { trees: trees_, ironNodes: iron_ } : {}),
+    players: ps, proj: prj, troops: trp, general,
+    ...(phase === 'lobby' ? { ballot: ballot.map(cid => [cid, clients.get(cid)?.name || '???', tallyFor(cid)]) } : {}),
+    ...(sendWorld ? { trees: trees_, ironNodes: iron_, lead: lead_ } : {}),
     wood: ram.bw, iron: ram.bi, woodNeeded: woodNeeded(), ironNeeded: ironNeeded(),
     ram: ram.active ? { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1) } : null,
     ramSite: { x: +ram.x.toFixed(1), z: +ram.z.toFixed(1), built: ram.built ? 1 : 0, active: ram.active ? 1 : 0, bw: ram.bw, bi: ram.bi, needW: woodNeeded(), needI: ironNeeded() },

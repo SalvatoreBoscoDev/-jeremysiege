@@ -438,7 +438,7 @@ export function createWorld(canvas, opts = {}) {
     const seen = new Set();
     for (const pp of s.players) {
       const [id, x, z, a, hp, wep, alive, slowed, maxHp] = pp; seen.add(id);
-      const rec = ensurePlayer(id);
+      const rec = ensurePlayer(id); rec.isGeneral = !!pp[12];
       if (rec.g.position.lengthSq() === 0) rec.g.position.set(x, 0, z);
       // Local player is positioned by client prediction (setLocalPos); don't let server snapshots yank it.
       if (id !== localId) { rec.tx = x; rec.tz = z; rec.ta = a; }
@@ -524,6 +524,8 @@ export function createWorld(canvas, opts = {}) {
         else if (rx <= -(CANNON.platformR - 0.5) && rx >= -(CANNON.platformR + 6.5) && Math.abs(rz) <= 2.3) liftTarget = Math.max(0, Math.min(1, (rx + CANNON.platformR + 6.5) / 6.5)) * CANNON.platformY; } // walking up the ramp
       rec.liftY = (rec.liftY || 0) + (liftTarget - (rec.liftY || 0)) * (1 - Math.exp(-12 * dt));
       rec.g.position.y = Math.max(rec.liftY || 0, terrainY(rec.g.position.x, rec.g.position.z)) - rec.tilt * 0.35;   // cannon platform OR the hill ramp, else ground (sink when dead)
+      if (rec.isGeneral && !rec.crown) { rec.crown = makeCrown(); rec.g.add(rec.crown); }
+      if (rec.crown) rec.crown.visible = !!rec.isGeneral && !rec.dead;
       if (!rec.dead) rec.flung = false;
       if (rec.vis) rec.vis.visible = !(rec.dead && rec.flung);
     }
@@ -709,7 +711,7 @@ export function createWorld(canvas, opts = {}) {
     setKingPos: (x, z, a) => { kingT.x = x; kingT.z = z; if (typeof a === 'number') kingT.a = a; king.position.x = x; king.position.z = z; },
     setLocalWizard: () => { localWizard = true; },
     setWizPos: (x, z, a) => { wizT.x = x; wizT.z = z; if (typeof a === 'number') wizT.a = a; wizT.has = 1; wiz.position.x = x; wiz.position.z = z; },
-    getPlayerMesh: (id) => playerMeshes.get(id), getWizPos: () => ({ x: wiz.position.x, z: wiz.position.z }), groundY: (x, z) => terrainY(x, z), render: (cam) => renderer.render(scene, cam) };
+    getPlayerMesh: (id) => playerMeshes.get(id), getWizPos: () => ({ x: wiz.position.x, z: wiz.position.z }), groundY: (x, z) => terrainY(x, z), setGeneral: () => {}, render: (cam) => renderer.render(scene, cam) };
 }
 
 // ---- scenery builders ----
@@ -721,11 +723,14 @@ function addMountains(scene, midZ) {
   for (let i = 0; i < 18; i++) {
     const a = (i / 18) * Math.PI * 2;
     const ridge = i % 2;
-    const r = (ridge ? 175 : 215) + Math.random() * 55;
     const h = 50 + Math.random() * 75;
     const baseR = 40 + Math.random() * 40;
+    let r = (ridge ? 175 : 215) + Math.random() * 55;
+    let px = Math.cos(a) * r, pz = midZ + Math.sin(a) * r;
+    // the ring is centred on the lane midpoint, so back-side peaks can creep into Jeremy's arena — push any intruder outward
+    while (Math.hypot(px - 0, pz - HILL.z) < baseR + 55) { r += 30; px = Math.cos(a) * r; pz = midZ + Math.sin(a) * r; if (r > 700) break; }
     const m = new THREE.Mesh(new THREE.ConeGeometry(baseR, h, 5), ridge ? near : far);
-    m.position.set(Math.cos(a) * r, h / 2 - 8, midZ + Math.sin(a) * r); m.rotation.y = Math.random() * 3; scene.add(m);
+    m.position.set(px, h / 2 - 8, pz); m.rotation.y = Math.random() * 3; scene.add(m);
     if (h > 95) { const cap = new THREE.Mesh(new THREE.ConeGeometry(baseR * 0.32, h * 0.22, 5), snow); cap.position.set(m.position.x, h - 8 - h * 0.11, m.position.z); cap.rotation.y = m.rotation.y; scene.add(cap); }
   }
 }
@@ -782,6 +787,14 @@ function bannerMaterial() {
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.8 });
 }
 // Ground height anyone stands on: the flat-topped hill, its front climbing ramp down to the gate, else lane level.
+function makeCrown() {   // gold crown floating over the elected General
+  const g = new THREE.Group(); g.position.y = 4.78;
+  const gold = new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.7, roughness: 0.25, emissive: 0x4a3600, emissiveIntensity: 0.4 });
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.32, 12), gold));
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.36, 6), gold); sp.position.set(Math.cos(a) * 0.5, 0.32, Math.sin(a) * 0.5); g.add(sp); }
+  const gl = new THREE.Sprite(glowMaterial(0xffd23f)); gl.scale.set(3.4, 3.4, 1); gl.position.y = 0.2; g.add(gl);
+  return g;
+}
 function terrainY(x, z) { return 0; }   // the back is a flat arena now — ground is level everywhere (cannon platform still lifts via liftY)
 function angDiff(target, cur) { let d = (target - cur) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
