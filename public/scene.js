@@ -14,7 +14,7 @@ export function createWorld(canvas, opts = {}) {
   const detail = quality !== 'low';              // 'medium' = full detail + nice materials, but NO shadows -> way lighter
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality !== 'low', powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'low' ? 1.5 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'low' ? 1 : 2));   // phones (quality:'low') render at native logical resolution — biggest GPU win on high-DPI screens
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.24;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
