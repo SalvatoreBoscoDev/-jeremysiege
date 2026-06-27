@@ -577,6 +577,8 @@ export function createWorld(canvas, opts = {}) {
       case 'death': Sound.death(); break;
       case 'troopdie': case 'troophit': case 'ramhitback': Sound.hit(); break;
       case 'kingatk': Sound.kingAttack(f.kind); break;
+      case 'laseraim': Sound.laserCharge(); break;
+      case 'laserbeam': Sound.laserFire(); break;
       case 'meteor': Sound.explosion(true); break;
       case 'freeze': Sound.freeze(); break;
       case 'rally': case 'wave': Sound.wave(); break;
@@ -594,13 +596,30 @@ export function createWorld(canvas, opts = {}) {
       if (f.k === 'meteor') { const b = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 12), new THREE.MeshStandardMaterial({ color: 0xff5500, emissive: 0xff3300, emissiveIntensity: 2 })); b.position.set(f.x, 40, f.z); scene.add(b); fxList.push({ m: b, life: 0, max: 0.5, kind: 'meteor' }); }
     } else if (f.k === 'kingatk') {
       // DRAMATIC royal attack: twin shockwaves, dome flash, energy pillar, flung embers
-      const palette = { slam: 0xff6a1a, sweep: 0xc04bff, cannon: 0xff2a2a, summon: 0xffcf3a };
+      const palette = { slam: 0xff6a1a, laser: 0xff2a55, cannon: 0xff2a2a, summon: 0xffcf3a };
       const col = palette[f.kind] || 0xff8800; const R = f.r || 10;
       for (const rr of [R * 1.7, R * 2.6]) { const m = new THREE.Mesh(new THREE.RingGeometry(0.1, rr, 44), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, side: THREE.DoubleSide })); m.rotation.x = -Math.PI / 2; m.position.set(f.x, 0.3, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.8, kind: 'ring' }); }
       const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 0.95, 20, 14), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5 })); dome.position.set(f.x, 1, f.z); scene.add(dome); fxList.push({ m: dome, life: 0, max: 0.5, kind: 'puff' });
       const pillar = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.4, R * 0.6, 70, 20, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide })); pillar.position.set(f.x, 35, f.z); scene.add(pillar); fxList.push({ m: pillar, life: 0, max: 0.65, kind: 'pillar' });
       const g = new THREE.Sprite(glowMaterial(col)); g.scale.set(R * 3.2, R * 3.2, 1); g.position.set(f.x, 5, f.z); scene.add(g); fxList.push({ m: g, life: 0, max: 0.55, kind: 'flash', base: R * 3.2 });
       for (let i = 0; i < 24; i++) { const m = new THREE.Mesh(fragGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1 })); m.position.set(f.x, 1.5, f.z); const ang = Math.random() * Math.PI * 2, sp = 12 + Math.random() * 26; const vel = new THREE.Vector3(Math.cos(ang) * sp, 14 + Math.random() * 24, Math.sin(ang) * sp); scene.add(m); fxList.push({ m, life: 0, max: 1.0 + Math.random() * 0.4, kind: 'frag', vel, spin: (Math.random() - 0.5) * 24 }); }
+    } else if (f.k === 'laseraim') {
+      // Telegraph: a flashing ground strip the King is about to vaporize. Orient a thin box along the ray.
+      const cx = f.x + f.dx * f.len / 2, cz = f.z + f.dz * f.len / 2, rotY = Math.atan2(-f.dz, f.dx), max = (f.delay || 1050) / 1000;
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(f.len, 0.2, f.w * 2), new THREE.MeshBasicMaterial({ color: 0xff2a55, transparent: true, opacity: 0.3, depthWrite: false }));
+      strip.position.set(cx, 0.35, cz); strip.rotation.y = rotY; scene.add(strip); fxList.push({ m: strip, life: 0, max, kind: 'lpulse' });
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(f.len, 0.06, 0.4), new THREE.MeshBasicMaterial({ color: 0xff5a77, transparent: true, opacity: 0.85, depthWrite: false }));
+      edge.position.set(cx, 0.4, cz); edge.rotation.y = rotY; scene.add(edge); fxList.push({ m: edge, life: 0, max, kind: 'lpulse' });
+    } else if (f.k === 'laserbeam') {
+      // BAM: a searing beam along the line, plus a fat glow and a row of sparks.
+      const cx = f.x + f.dx * f.len / 2, cz = f.z + f.dz * f.len / 2, rotY = Math.atan2(-f.dz, f.dx);
+      const core = new THREE.Mesh(new THREE.BoxGeometry(f.len, 2.4, f.w * 2), new THREE.MeshBasicMaterial({ color: 0xffe2ea, transparent: true, opacity: 0.98, depthWrite: false }));
+      core.position.set(cx, 2, cz); core.rotation.y = rotY; scene.add(core); fxList.push({ m: core, life: 0, max: 0.42, kind: 'beam', base: 0.98 });
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(f.len, 4.5, f.w * 3.4), new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0.6, depthWrite: false }));
+      glow.position.set(cx, 2.4, cz); glow.rotation.y = rotY; scene.add(glow); fxList.push({ m: glow, life: 0, max: 0.5, kind: 'beam', base: 0.6 });
+      const scar = new THREE.Mesh(new THREE.BoxGeometry(f.len, 0.12, f.w * 2), new THREE.MeshBasicMaterial({ color: 0x661022, transparent: true, opacity: 0.85, depthWrite: false }));
+      scar.position.set(cx, 0.32, cz); scar.rotation.y = rotY; scene.add(scar); fxList.push({ m: scar, life: 0, max: 0.9, kind: 'glow' });
+      for (let i = 0; i < 18; i++) { const u = Math.random(); const bx = f.x + f.dx * f.len * u + (Math.random() - 0.5) * f.w, bz = f.z + f.dz * f.len * u + (Math.random() - 0.5) * f.w; const m = new THREE.Mesh(fragGeo, new THREE.MeshBasicMaterial({ color: 0xff6688, transparent: true, opacity: 1 })); m.position.set(bx, 1.4, bz); const ang = Math.random() * Math.PI * 2, sp = 8 + Math.random() * 18; scene.add(m); fxList.push({ m, life: 0, max: 0.7 + Math.random() * 0.3, kind: 'frag', vel: new THREE.Vector3(Math.cos(ang) * sp, 10 + Math.random() * 16, Math.sin(ang) * sp), spin: (Math.random() - 0.5) * 20 }); }
     } else if (f.k === 'death') { explode(f.x, f.z, true); if (f.fling) { const col = (roster.get(f.id) || {}).color || 0x3a6ea0; spawnRagdoll(f.x, f.z, f.vx || 0, f.vy || 20, f.vz || 0, col); const rec = playerMeshes.get(f.id); if (rec) rec.flung = true; }
     } else if (f.k === 'troopdie') { explode(f.x, f.z, false);
     } else if (f.k === 'pickup') {
@@ -683,6 +702,8 @@ export function createWorld(canvas, opts = {}) {
       else if (fx.kind === 'spike') { fx.m.scale.y = Math.min(1.2, 0.25 + t * 2); fx.m.material.opacity = 0.9 * (1 - t); }
       else if (fx.kind === 'castlabel') { fx.m.position.y = fx.y0 + t * 7; fx.m.material.opacity = t < 0.7 ? 1 : Math.max(0, 1 - (t - 0.7) / 0.3); }
       else if (fx.kind === 'tracer') { fx.m.material.opacity = 0.95 * (1 - t); }
+      else if (fx.kind === 'lpulse') { const pulse = 0.5 + 0.5 * Math.sin(fx.life * 22); fx.m.material.opacity = (0.18 + 0.5 * t) * (0.5 + 0.5 * pulse); }   // ramps up + flashes as the charge completes
+      else if (fx.kind === 'beam') { fx.m.material.opacity = fx.base * (1 - t * t); fx.m.scale.z = 1 - t * 0.4; }
       if (fx.life >= fx.max) { scene.remove(fx.m); fxList.splice(i, 1); }
     }
   }

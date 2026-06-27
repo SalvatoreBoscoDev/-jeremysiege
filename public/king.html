@@ -65,11 +65,11 @@
     <div class="blabel">KING</div><div class="bar"><div id="hpFill" style="width:100%"></div></div>
   </div>
   <div id="status"></div>
-  <div class="hint">WASD move &nbsp;•&nbsp; Left-click Catapult &nbsp;•&nbsp; Q Slam &nbsp;•&nbsp; E Sweep &nbsp;•&nbsp; R Summon &nbsp;•&nbsp; F open/close GATE &amp; sally out</div>
+  <div class="hint">WASD move &nbsp;•&nbsp; Left-click Catapult &nbsp;•&nbsp; Q Slam &nbsp;•&nbsp; E Laser (aim &amp; charge) &nbsp;•&nbsp; R Summon &nbsp;•&nbsp; F open/close GATE &amp; sally out</div>
   <div id="abilities">
     <div class="ab" data-k="cannon"><div class="k">CLICK</div><div class="n">Catapult</div><div class="cd"><div></div></div></div>
     <div class="ab" data-k="slam"><div class="k">Q</div><div class="n">Slam</div><div class="cd"><div></div></div></div>
-    <div class="ab" data-k="sweep"><div class="k">E</div><div class="n">Sweep</div><div class="cd"><div></div></div></div>
+    <div class="ab" data-k="laser"><div class="k">E</div><div class="n">Laser</div><div class="cd"><div></div></div></div>
     <div class="ab" data-k="summon"><div class="k">R</div><div class="n">Summon</div><div class="cd"><div></div></div></div>
   </div>
   <div id="ctrls"><button id="gateBtn" class="alt">OPEN GATE</button><button id="startBtn">START BATTLE</button><button id="resetBtn" class="alt">Reset</button></div>
@@ -98,7 +98,7 @@ const camera=new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 0.1, 600);
 let camX=0, camZ=LANE.kingZ-16, camY=HILL.height+30; // smoothed chase position
 camera.position.set(0, HILL.height+42, LANE.kingZ-16); camera.lookAt(0, HILL.height-2, LANE.kingZ+55);
 
-let cfg=null, shopCfg=null, lastSnap=null, lastGold=0; const lastCast={cannon:0,slam:0,sweep:0,summon:0};
+let cfg=null, shopCfg=null, lastSnap=null, lastGold=0; const lastCast={cannon:0,slam:0,laser:0,summon:0};
 let kpos=null; const clampN=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;   // client-authoritative King position
 const reticle=new THREE.Mesh(new THREE.RingGeometry(2.2,3,24), new THREE.MeshBasicMaterial({color:0xff3344,side:THREE.DoubleSide}));
 reticle.rotation.x=-Math.PI/2; reticle.position.y=0.4; world.scene.add(reticle);
@@ -126,7 +126,7 @@ let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane
 addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
 addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls')) cast('cannon'); });
 addEventListener('contextmenu', e=>e.preventDefault());
-const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('sweep'); if(k==='r')cast('summon'); if(k==='f' && !keys[k]) net.send({t:'gate'}); if(k==='m' && !keys[k]) Sound.toggleMute(); keys[k]=true; });
+const keys={}; addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if(k==='q')cast('slam'); if(k==='e')cast('laser'); if(k==='r')cast('summon'); if(k==='f' && !keys[k]) net.send({t:'gate'}); if(k==='m' && !keys[k]) Sound.toggleMute(); keys[k]=true; });
 addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
 function cast(kind){ if(!cfg||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[kind]<cfg.attacks[kind].cd) return; lastCast[kind]=now; net.send({t:'katk',kind,x:aim.x,z:aim.z}); }
 setInterval(()=>{ if(!net.ready||!kpos) return; const a=Math.atan2(aim.x-kpos.x, aim.z-kpos.z); net.send({t:'kpos', x:+kpos.x.toFixed(2), z:+kpos.z.toFixed(2), a}); }, 40);

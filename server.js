@@ -118,7 +118,8 @@ const combatMs = TEST_ROUND_MS != null ? TEST_ROUND_MS : ROUNDS.combatMs;
 const interMs = TEST_INT_MS != null ? TEST_INT_MS : ROUNDS.intermissionMs;
 
 const gate = { hp: 0, maxHp: 0 };
-const king = { x: 0, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: 0, maxHp: 0, alive: true, cd: { slam: 0, cannon: 0, sweep: 0, summon: 0 }, gateOpen: false, up: { might: 0, swift: 0, reach: 0 } };
+const king = { x: 0, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: 0, maxHp: 0, alive: true, cd: { slam: 0, cannon: 0, laser: 0, summon: 0 }, gateOpen: false, up: { might: 0, swift: 0, reach: 0 } };
+let pendingLasers = [];   // delayed Death Beams: telegraphed now, fire after a short charge
 let wizard = null;
 // ---- General (elected commander) + lobby vote ----
 const GEN = { hpMult: 1.8, weapon: 'shotgun', cmdCd: 22000, radius: 34, rallyDur: 6000, rallyHeal: 45, rallyDmg: 1.3, rallySpeed: 1.25 };
@@ -396,8 +397,17 @@ function damagePlayer(p, amount, src) {
 function kingAttack(id, kind, tx, tz) {
   if (clients.get(id)?.role !== 'king' || phase !== 'combat' || !king.alive) return;
   const cfg = KING.attacks[kind]; if (!cfg) return; const t = now(); const cdMult = Math.max(0.5, 1 - 0.12 * king.up.swift); if (t - king.cd[kind] < cfg.cd * cdMult) return; king.cd[kind] = t;
-  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', sweep: 'Royal Sweep', summon: 'Summon Wave' }[kind] || kind), color: 0xffd23f });
+  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Summon Wave' }[kind] || kind), color: 0xffd23f });
   if (kind === 'summon') { spawnWave(waveSize()); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }
+  if (kind === 'laser') {
+    // Delayed line beam: aim a ray from the King toward the click, telegraph it now, fire after cfg.delay.
+    let dx = (+tx || king.x) - king.x, dz = (+tz || (king.z + 1)) - king.z; const dlen = Math.hypot(dx, dz) || 1; dx /= dlen; dz /= dlen;
+    const len = cfg.range * (1 + 0.2 * king.up.reach), width = cfg.width, dmg = cfg.dmg * (1 + 0.2 * king.up.might);
+    pendingLasers.push({ ox: king.x, oz: king.z, dx, dz, len, width, dmg, fireAt: t + cfg.delay });
+    fxQueue.push({ k: 'laseraim', x: king.x, z: king.z, dx, dz, len, w: width, delay: cfg.delay });
+    broadcast({ t: 'ev', kind: 'kingcharge', atk: 'laser' });
+    return;
+  }
   let cx = king.x, cz = king.z;
   // CAMP.z0 - 5: the King can't bombard the attackers' home base (stops ~5 units in front of the camp fence).
   if (kind === 'cannon') { cx = clamp(+tx || 0, -LANE.halfWidth, LANE.halfWidth); cz = clamp(+tz || 0, LANE.duelZ, CAMP.z0 - 5); }   // can target down into the palace to hit attackers storming the hill
@@ -425,6 +435,15 @@ function aoeBuildsFriendlies(x, z, radius, dmg) {
   for (const f of friendlies.values()) if (Math.hypot(f.x - x, f.z - z) <= radius) { f.hp -= dmg; if (f.hp <= 0) { fxQueue.push({ k: 'troopdie', x: f.x, z: f.z }); friendlies.delete(f.id); } }
   if (cannon.built && Math.hypot(CANNON.x - x, CANNON.z - z) <= radius + CANNON.r) { cannon.hp -= dmg; if (cannon.hp <= 0) { fxQueue.push({ k: 'boom', x: CANNON.x, z: CANNON.z, r: 8, c: 0xff7733 }); initCannon(); broadcast({ t: 'ev', kind: 'builddown', what: 'cannon' }); } }
 }
+// Death Beam: damage everything within `width` of the ray (ox,oz)->dir for `len` units.
+function fireLaser(L) {
+  const onLine = (px, pz) => { const proj = (px - L.ox) * L.dx + (pz - L.oz) * L.dz; if (proj < 0 || proj > L.len) return false; const perp = Math.hypot(px - (L.ox + L.dx * proj), pz - (L.oz + L.dz * proj)); return perp <= L.width; };
+  for (const p of players.values()) { if (p.alive && onLine(p.x, p.z)) damagePlayer(p, L.dmg, { x: L.ox, z: L.oz }); }
+  for (const f of friendlies.values()) if (onLine(f.x, f.z)) { f.hp -= L.dmg; if (f.hp <= 0) { fxQueue.push({ k: 'troopdie', x: f.x, z: f.z }); friendlies.delete(f.id); } }
+  if (ram.active && onLine(ram.x, ram.z)) { ram.z = Math.min(RAM.startZ, ram.z + RAM.knockback); fxQueue.push({ k: 'ramhitback', x: ram.x, z: ram.z }); }
+  fxQueue.push({ k: 'laserbeam', x: L.ox, z: L.oz, dx: L.dx, dz: L.dz, len: L.len, w: L.width });
+  broadcast({ t: 'ev', kind: 'kingatk', atk: 'laser' });
+}
 
 // ---------- troops ----------
 function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
@@ -435,7 +454,7 @@ function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
   general = null; ballot = []; votes.clear();
   gold = TEST_GOLD != null ? TEST_GOLD : GOLD.start;
-  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, sweep: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 };
+  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = [];
   projectiles = []; troops.clear(); friendlies.clear(); initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
   if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; }
@@ -461,6 +480,8 @@ setInterval(() => { try {
   for (const o of irons.values()) if (!o.alive && t >= o.regrowAt) { o.alive = true; o.hp = IRON.hp; }
   if (combat && gateUp() && king.alive && king.hp < king.maxHp) king.hp = Math.min(king.maxHp, king.hp + king.maxHp * KING.regenFrac * tune.kingRegen * dt);   // regen while shielded behind the closed gate
   if (combat && t - lastWaveAt > WAVE.intervalMs / tune.waveRate) { lastWaveAt = t; spawnWave(waveSize()); }
+  // Fire any telegraphed Death Beams whose charge has elapsed (drop them all if combat ends or the King dies).
+  if (pendingLasers.length) { if (!combat || !king.alive) pendingLasers = []; else { for (let i = pendingLasers.length - 1; i >= 0; i--) { if (t >= pendingLasers[i].fireAt) { fireLaser(pendingLasers[i]); pendingLasers.splice(i, 1); } } } }
 
   const up = gateUp();
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer

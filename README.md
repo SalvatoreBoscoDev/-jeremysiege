@@ -144,7 +144,7 @@ Dying is dramatic now too - players **explode into flying gibs** with a flash an
 ### Jeremy (King) — `/king`
 - **WASD** walk around your courtyard (smooth, bounded to the area in front of the gate); face the cursor to aim.
 - **Left-click** the battlefield: aimed **Cannon Blast**.
-- **Q**: **Ground Slam** around you. **E**: **Royal Sweep** (huge AoE). **R**: **Summon** a fresh wave of guards (more guards = stronger shield).
+- **Q**: **Ground Slam** around you. **E**: **Death Beam** — aim with the cursor; a warning strip flashes, then a searing laser fires down that line. **R**: **Summon** a fresh wave of guards (more guards = stronger shield).
 - Press **START BATTLE** once everyone has joined (this locks in your health based on the crowd size). **Reset** starts a fresh round.
 
 ### Marin (Wizard) — `/wizard`

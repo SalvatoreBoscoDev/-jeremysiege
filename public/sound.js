@@ -73,10 +73,11 @@ export const Sound = {
   kingAttack(kind) {
     if (!ok(4, 160)) return;
     this.explosion(true);
-    if (kind === 'sweep') tone({ f: 260, f2: 720, dur: 0.4, type: 'sawtooth', vol: 0.32 });
-    else if (kind === 'summon') fanfare([[180, 0], [240, 0.1]], 'sawtooth', 0.3, 0.3);
+    if (kind === 'summon') fanfare([[180, 0], [240, 0.1]], 'sawtooth', 0.3, 0.3);
     else tone({ f: 150, f2: 55, dur: 0.45, type: 'square', vol: 0.34 });
   },
+  laserCharge() { if (!ok(4, 200)) return; tone({ f: 90, f2: 540, dur: 1.0, type: 'sawtooth', vol: 0.26 }); },   // rising whine as the beam spools up
+  laserFire() { if (!ok(4, 160)) return; tone({ f: 900, f2: 120, dur: 0.32, type: 'sawtooth', vol: 0.38 }); tone({ f: 1500, f2: 300, dur: 0.18, type: 'square', vol: 0.18 }); noise({ dur: 0.25, vol: 0.22, cut: 2200, type: 'bandpass' }); },
   wave() { if (ok(3, 300)) { tone({ f: 165, f2: 120, dur: 0.5, type: 'sawtooth', vol: 0.22 }); tone({ f: 110, f2: 90, dur: 0.55, type: 'square', vol: 0.18 }); } },
 
   // ---- gathering / building ----

@@ -43,7 +43,7 @@ export const KING = {
   attacks: {
     slam:   { cd: 2500, dmg: 55,  radius: 14, desc: 'Ground Slam (around the King)' },
     cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Catapult shot (aimed)' },
-    sweep:  { cd: 4500, dmg: 80,  radius: 21, desc: 'Royal Sweep (huge AoE)' },
+    laser:  { cd: 4500, dmg: 95,  range: 78, width: 6, delay: 1050, desc: 'Death Beam (delayed line)' },
     summon: { cd: 6000, dmg: 0,   radius: 0,  desc: 'Summon a Wave of guards' },
   },
 };
