@@ -75,7 +75,7 @@ try { const qr=qrcode(0,'M'); qr.addData(joinUrl); qr.make(); $('#qr').src=qr.cr
 
 const net=connect({
   roster(m){ world.setRoster(m.players); window._att=m.count; },
-  snapshot(m){ world.applySnapshot(m); updateHud(m); renderLead(m); renderBallot(m); },
+  snapshot(m){ world.applySnapshot(m); updateHud(m); renderLead(m); },
   event(ev){
     if(ev.kind==='gameover'){ const win=ev.result==='attackers'; $('#bigh').textContent=win?'JEREMY HAS FALLEN!':'THE CASTLE HELD!'; $('#bigh').style.color=win?'#aaff66':'#ff8866';
       let html=win?'The horde stormed the castle!':'Jeremy survived every round.';
@@ -83,14 +83,11 @@ const net=connect({
       if(ev.board&&ev.board.length) html+='<div class="board">'+ev.board.slice(0,5).map((b,i)=>`${i+1}. ${b.general?'👑 ':''}${b.name} — ${b.kills}k / ${b.deaths}d`).join('<br>')+'</div>';
       $('#bigsub').innerHTML=html; const showOver=()=>{ $('#big').style.display='flex'; Sound[win?'win':'lose'](); }; if(win) setTimeout(showOver, 1900); else showOver(); }   // let the FINAL BLOW moment breathe before the scoreboard
     else if(ev.kind==='victory'){ flash('FINAL BLOW — '+(ev.byName||'A hero')+'!', '#ff3366'); slowmoUntil=performance.now()+1800; Sound.explosion(true); }
-    else if(ev.kind==='streak'){ flash(ev.name+' — '+ev.label+'!', '#ff5a2a'); addFeed('🔥 '+ev.name+' '+ev.label+' (+'+ev.gold+'g)'); Sound.streak(); }
-    else if(ev.kind==='champdown'){ flash(ev.name+' SLEW A CHAMPION!', '#ffcf3a'); addFeed('⚔️ '+ev.name+' downed a Champion'); Sound.streak(); }
-    else if(ev.kind==='powerup'){ flash('⚡ '+ev.label+'!', ev.color||'#8fe3ff'); addFeed('⚡ '+(ev.name||'A hero')+' grabbed '+ev.label); }
-    else if(ev.kind==='general'){ $('#crownName').textContent=(ev.name||'A hero')+' leads the siege!'; $('#crown').style.display='flex'; setTimeout(()=>$('#crown').style.display='none', 4500); addFeed('👑 '+(ev.name||'A hero')+' elected General'); Sound.round(); }
+    else if(ev.kind==='generals'){ const ns=(ev.names||[]); $('#crownName').textContent=ns.join('  •  ')+' lead the siege!'; $('#crown').querySelector('h1').textContent='👑 GENERALS CHOSEN'; $('#crown').style.display='flex'; setTimeout(()=>$('#crown').style.display='none', 4500); addFeed('👑 Generals: '+ns.join(', ')); Sound.round(); }
     else if(ev.kind==='reset'){ $('#big').style.display='none'; $('#crown').style.display='none'; }
     else if(ev.kind==='round'){ addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
     else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='ramhit'){ addFeed('RAM SMASHES THE GATE!'); Sound.gateHit(); }
-    else if(ev.kind==='death') addFeed('Crushed: '+ev.name); else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
+    else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
     else if(ev.kind==='ramdeploy') addFeed('BATTERING RAM DEPLOYED!'); },
 });
 net.join('screen','TV');
@@ -98,9 +95,6 @@ let lastLead=null;
 function renderLead(m){ if(m.lead) lastLead=m.lead; const L=$('#lead');
   if((m.phase!=='combat'&&m.phase!=='intermission')||!lastLead||!lastLead.length){ L.style.display='none'; return; }
   L.style.display='block'; L.innerHTML='<div class="lh">TOP HEROES</div>'+lastLead.map(([name,kills,gold,isGen])=>`<div class="lr"><span class="ln">${isGen?'👑 ':''}${name}</span><span class="lk">${kills}</span></div>`).join(''); }
-function renderBallot(m){ const B=$('#ballot');
-  if(m.phase==='lobby'&&m.ballot&&m.ballot.length){ B.style.display='block'; B.innerHTML='<div class="bt">👑 VOTE YOUR GENERAL</div><div class="bs">Tap a name on your phone</div><div class="bc">'+m.ballot.map(([cid,name,tally])=>`<div class="bcd"><div class="bn">${name}</div><div class="bv">${tally}</div></div>`).join('')+'</div>'; }
-  else B.style.display='none'; }
 
 let lastT=performance.now(), slowmoUntil=0;
 const flashEl=$('#flash');

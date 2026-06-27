@@ -8,7 +8,10 @@ const recent = [];   // timestamps, for the global rate limiter (keeps 50 player
 
 function ok(max = 9, win = 110) {
   const t = performance.now();
-  while (recent.length && t - recent[0] > win) recent.shift();
+  while (recent.length && t - recent[0] > Math.max(win, 120)) recent.shift();   // keep enough history for the global window
+  // GLOBAL voice ceiling: at most ~5 SFX may START per 90ms across ALL categories, so 50 players don't blur into mush.
+  let g = 0; for (let i = recent.length - 1; i >= 0 && t - recent[i] <= 90; i--) g++;
+  if (g >= 5) return false;
   if (recent.length >= max) return false;
   recent.push(t);
   return true;

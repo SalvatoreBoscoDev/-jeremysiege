@@ -110,7 +110,7 @@ const net=connect({
   event(ev){
     if(ev.kind==='gameover'){ const win=ev.result==='king'; $('#big').style.display='flex'; $('#big').style.background='radial-gradient(circle at 50% 40%,'+(win?'#1d3a1d,#0a0e0a':'#3a1d1d,#0e0a0a')+')'; $('#bigTxt').textContent=win?'THE CASTLE HELD!':'THE KING HAS FALLEN'; $('#bigTxt').style.color=win?'#aaff66':'#ff5555'; $('#bigSub').textContent=win?'You survived every round. Long live Jeremy!':'The horde broke through.'; Sound[win?'win':'lose'](); }
     else if(ev.kind==='reset'){ $('#big').style.display='none'; }
-    else if(ev.kind==='round'){ addFeed('Round '+ev.round+' begins'); Sound.round(); } else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='death') addFeed('Killed: '+ev.name); else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='ramhit'){ addFeed('Ram hit the gate!'); Sound.gateHit(); }
+    else if(ev.kind==='round'){ addFeed('Round '+ev.round+' begins'); Sound.round(); } else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='bought') addFeed('Bought: '+ev.item); else if(ev.kind==='ramhit'){ addFeed('Ram hit the gate!'); Sound.gateHit(); }
   },
 });
 $('#enter').onclick=()=>{ Sound.init(); net.join('king',($('#kname').value||'Jeremy').trim().slice(0,16)||'Jeremy'); world.setLocalKing(); $('#overlay').style.display='none'; startLoop(); };
