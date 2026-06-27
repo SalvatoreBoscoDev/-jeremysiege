@@ -109,6 +109,27 @@ export function createWorld(canvas, opts = {}) {
     const cw = new THREE.Mesh(new THREE.BoxGeometry(3, 12, 14), stone); cw.position.set(sx * 27, 6, -10); if (realShadows) cw.castShadow = true; castle.add(cw);
     for (let z = -4; z > -18; z -= 4) { const mer = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.4), stone); mer.position.set(sx * 27, 12.8, z); castle.add(mer); }
   }
+  // ---- richer dressing: buttresses, machicolations, gold bands, hanging banners (all on the towers/walls, gate path stays clear) ----
+  const bannerMat = new THREE.MeshStandardMaterial({ color: 0x7a1230, roughness: 0.82, side: THREE.DoubleSide });
+  for (const sx of [-1, 1]) {
+    const tx = sx * 28;
+    if (detail) for (const a of [0.55, Math.PI - 0.55, Math.PI + 0.55, -0.55]) {   // four corner buttresses climbing each tower
+      const but = new THREE.Mesh(new THREE.BoxGeometry(1.5, 32, 1.8), stoneDark); but.position.set(tx + Math.cos(a) * 5.6, 16, Math.sin(a) * 5.6); castle.add(but);
+    }
+    const mac = new THREE.Mesh(new THREE.CylinderGeometry(6.7, 6.0, 2.4, 20), stoneDark); mac.position.set(tx, 37.2, 0); castle.add(mac);   // overhanging machicolation ring
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 6.2, 0.9, 20), goldMat); band.position.set(tx, 40.3, 0); castle.add(band);  // gold band under the roof
+    const ban = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 13), bannerMat); ban.position.set(tx, 23.5, 6.0); castle.add(ban);               // long hanging banner, lane-facing
+    const banRod = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5.2, 8), goldMat); banRod.rotation.z = Math.PI / 2; banRod.position.set(tx, 30, 6.05); castle.add(banRod);
+    const crest = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.4, 3), goldMat); crest.position.set(tx, 24.5, 6.16); crest.rotation.x = Math.PI; castle.add(crest);  // gold crest on the banner
+  }
+  // ---- stone gargoyle guardians perched atop the curtain walls, flanking the gate (behind it, clear of the lane) ----
+  for (const sx of [-1, 1]) {
+    const gx = sx * 27;
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2, 3.2), stoneDark); plinth.position.set(gx, 13, -4); castle.add(plinth);
+    const body = new THREE.Mesh(new THREE.ConeGeometry(1.5, 5, 8), stone); body.position.set(gx, 16.5, -4); castle.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.95, 10, 10), stone); head.position.set(gx, 19.4, -4); castle.add(head);
+    const eyes = new THREE.Mesh(new THREE.SphereGeometry(0.95, 10, 10), new THREE.MeshStandardMaterial({ color: 0x130f1c, emissive: 0xff5522, emissiveIntensity: 0.9 })); eyes.position.set(gx, 19.5, -3.2); eyes.scale.set(1, 0.45, 0.5); castle.add(eyes);
+  }
 
   // ---- Jeremy's arena: a flat circular courtyard in the back (level ground — no hill to climb) ----
   const arenaR = HILL.radius;
@@ -147,6 +168,9 @@ export function createWorld(canvas, opts = {}) {
   const gateDoor = new THREE.Mesh(new THREE.BoxGeometry(LANE.halfWidth * 2 - 2, 7.5, 2.6), new THREE.MeshStandardMaterial({ color: 0x6e4a28, roughness: 0.78, metalness: 0.18, emissive: 0xff3300, emissiveIntensity: 0 }));
   gateDoor.position.y = 3.75; if (realShadows) gateDoor.castShadow = true; gateGroup.add(gateDoor);
   for (const yy of [1.75, 3.75, 5.75]) { const band = new THREE.Mesh(new THREE.BoxGeometry(LANE.halfWidth * 2 - 1, 0.8, 2.8), new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.7, roughness: 0.4 })); band.position.y = yy; gateGroup.add(band); }
+  // rows of iron studs so the gate reads as a heavy, riveted castle door
+  const studMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.8, roughness: 0.35 });
+  for (const yy of [1.75, 3.75, 5.75]) for (let xx = -22; xx <= 22; xx += 5.5) { const stud = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), studMat); stud.position.set(xx, yy, 1.45); gateGroup.add(stud); }
   let gateFrac = 1, gateOpenVis = false;
 
   // ---- archer towers (bought in the shop) ----
