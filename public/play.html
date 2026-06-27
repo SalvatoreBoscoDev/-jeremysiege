@@ -249,8 +249,8 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       const gdown = !(lastSnap.gate && lastSnap.gate.hp>0 && !lastSnap.gate.open);   // gate smashed OR Jeremy sallied it open
       [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z, gdown ? LANE.duelZ : undefined);
       if(!gdown && myPos.z<LANE.wallZ+3.5) myPos.z=LANE.wallZ+3.5;
-      const dx=sx-myPos.x, dz=sz-myPos.z;                        // soft reconcile to server (knockback/clamps)
-      const d2r=dx*dx+dz*dz; if(d2r>36){ myPos.x=sx; myPos.z=sz; } else if(d2r>4){ myPos.x+=dx*0.10; myPos.z+=dz*0.10; }   // only correct real drift (knockback/clamp); trust local prediction for small moves -> linear feel
+      const dx=sx-myPos.x, dz=sz-myPos.z;                        // reconcile only a GENUINE desync, not network latency
+      const d2r=dx*dx+dz*dz; if(d2r>484){ myPos.x=sx; myPos.z=sz; }   // snap only on a real teleport/desync (>22u). The server echo lags by the phone's round-trip, so trusting local prediction here is what stops the laggy-phone rubber-band/jumping; client & server use identical lane clamps so they won't drift.
     }
     const px=myPos.x, pz=myPos.z;
     if(aiming) facing=aimAssist(px,pz,Math.atan2(aimVX,aimVY));
