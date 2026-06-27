@@ -23,7 +23,6 @@ const TEST_HP = ENVN('JEREMY_HP'), TEST_GATE = ENVN('GATE_HP');
 const TEST_WOOD = ENVN('WOOD_NEEDED'), TEST_IRON = ENVN('IRON_NEEDED'), TEST_PGOLD = ENVN('PLAYER_GOLD');
 const TEST_ROUND_MS = ENVN('ROUND_MS'), TEST_INT_MS = ENVN('INT_MS'), TEST_ROUNDS = ENVN('ROUNDS_N'), TEST_GOLD = ENVN('GOLD_START');
 const NO_TROOPS = !!process.env.NO_TROOPS;
-const TEST_WALK = !!process.env.TEST_WALK;   // DEBUG: troops ignore all AI and walk smooth straight lines to fixed zones (to test movement smoothness vs network/interp)
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const ROUTES = { '/': 'join.html', '/play': 'play.html', '/king': 'king.html', '/wizard': 'wizard.html', '/screen': 'screen.html' };
@@ -447,9 +446,9 @@ function fireLaser(L) {
 }
 
 // ---------- troops ----------
-function waveSize() { if (TEST_WALK) return 30; return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
-function maxAlive() { if (TEST_WALK) return WAVE.maxAliveHardCap; return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
-function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { const sx = (Math.random() - 0.5) * LANE.halfWidth * 1.8; const tr = { id: troopId, x: sx, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }; if (TEST_WALK) { const r = Math.random(); tr.dest = r < 0.5 ? { x: sx, z: 118 } : r < 0.75 ? { x: -39, z: 112 } : { x: 38, z: 112 }; }   /* 50% straight up the lane, 25% to the WOOD pocket (left), 25% to the IRON pocket (right) */ troops.set(troopId, tr); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
+function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
+function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
+function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
@@ -495,7 +494,6 @@ setInterval(() => { try {
   }
 
   if (combat) for (const tr of troops.values()) {
-    if (TEST_WALK) { const d = tr.dest; if (d) { const dx = d.x - tr.x, dz = d.z - tr.z, dd = Math.hypot(dx, dz); if (dd > 0.4) { tr.x += (dx / dd) * TROOP.speed * dt; tr.z += (dz / dd) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; } } continue; }   // DEBUG: smooth straight line to the assigned zone, no AI
     // nearest live attacker (archers shoot this; also a melee candidate)
     let tp = null, pbest = Infinity;
     for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tr.x) ** 2 + (p.z - tr.z) ** 2; if (d < pbest) { pbest = d; tp = p; } }
@@ -521,7 +519,7 @@ setInterval(() => { try {
     }
   }
   // Keep troops from piling onto one tile (a stack reads as a single super-unit that hits all at once).
-  if (!TEST_WALK && combat && troops.size > 1) { const TSEP = 1.7, arr = [...troops.values()];
+  if (combat && troops.size > 1) { const TSEP = 1.7, arr = [...troops.values()];
     for (let a = 0; a < arr.length; a++) for (let b = a + 1; b < arr.length; b++) { const A = arr[a], B = arr[b], sdx = B.x - A.x, sdz = B.z - A.z, sd = sdx * sdx + sdz * sdz; if (sd < TSEP * TSEP && sd > 0.0004) { const dist = Math.sqrt(sd), push = (TSEP - dist) * 0.5, ux = sdx / dist, uz = sdz / dist; A.x -= ux * push; A.z -= uz * push; B.x += ux * push; B.z += uz * push; } }
     for (const tr of arr) { const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
   }
