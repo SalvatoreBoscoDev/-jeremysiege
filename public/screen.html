@@ -48,7 +48,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="hud">
-  <div id="title"><h1>HUNT FOR JEREMY</h1></div>
+  <div id="title"><h1>HUNT FOR JEREMY</h1><div style="text-align:center;font-weight:900;font-size:17px;letter-spacing:1px;color:#ffd23f;text-shadow:0 2px 8px #000;margin-top:2px">🎂 HAPPY BIRTHDAY, JEREMY! 🎂</div></div>
   <div id="hpwrap"><div class="bar"><div id="hpfill" style="width:100%"></div></div><div id="hptext">King Jeremy</div></div>
   <div id="count">0 attackers<br>0 guards</div>
   <div id="feed"></div>
@@ -81,11 +81,12 @@ const net=connect({
       let html=win?'The horde stormed the castle!':'Jeremy survived every round.';
       if(ev.mvp) html+=`<div class="mvp">🏆 MVP: ${ev.mvp.name} — ${ev.mvp.kills} kills</div>`;
       if(ev.board&&ev.board.length) html+='<div class="board">'+ev.board.slice(0,5).map((b,i)=>`${i+1}. ${b.general?'👑 ':''}${b.name} — ${b.kills}k / ${b.deaths}d`).join('<br>')+'</div>';
+      html+='<div style="margin-top:16px;color:#ffd23f;font-weight:900;font-size:26px">🎂 Happy Birthday, Jeremy! 🎂</div>';
       $('#bigsub').innerHTML=html; const showOver=()=>{ $('#big').style.display='flex'; Sound[win?'win':'lose'](); }; if(win) setTimeout(showOver, 1900); else showOver(); }   // let the FINAL BLOW moment breathe before the scoreboard
     else if(ev.kind==='victory'){ flash('FINAL BLOW — '+(ev.byName||'A hero')+'!', '#ff3366'); slowmoUntil=performance.now()+1800; Sound.explosion(true); }
     else if(ev.kind==='generals'){ const ns=(ev.names||[]); $('#crownName').textContent=ns.join('  •  ')+' lead the siege!'; $('#crown').querySelector('h1').textContent='👑 GENERALS CHOSEN'; $('#crown').style.display='flex'; setTimeout(()=>$('#crown').style.display='none', 4500); addFeed('👑 Generals: '+ns.join(', ')); Sound.round(); }
     else if(ev.kind==='reset'){ $('#big').style.display='none'; $('#crown').style.display='none'; }
-    else if(ev.kind==='round'){ addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
+    else if(ev.kind==='round'){ flash('⚔️ ROUND '+ev.round+' — FIGHT!', '#ffd23f'); addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
     else if(ev.kind==='gatebreached'){ addFeed('GATE BREACHED!'); Sound.gateBreach(); } else if(ev.kind==='ramhit'){ addFeed('RAM SMASHES THE GATE!'); Sound.gateHit(); }
     else if(ev.kind==='bought') addFeed('Jeremy bought: '+ev.item);
     else if(ev.kind==='ramdeploy') addFeed('BATTERING RAM DEPLOYED!'); },

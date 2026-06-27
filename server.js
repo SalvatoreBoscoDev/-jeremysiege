@@ -128,7 +128,6 @@ const interMs = TEST_INT_MS != null ? TEST_INT_MS : ROUNDS.intermissionMs;
 const gate = { hp: 0, maxHp: 0 };
 const king = { x: 0, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: 0, maxHp: 0, alive: true, cd: { slam: 0, cannon: 0, laser: 0, summon: 0 }, gateOpen: false, up: { might: 0, swift: 0, reach: 0 } };
 let pendingLasers = [];   // delayed Death Beams: telegraphed now, fire after a short charge
-let kingBarrage = null;   // grenade-barrage ULT: rains explosions around the King over a few seconds
 let wizard = null;
 // ---- General (elected commander) + lobby vote ----
 const GEN = { hpMult: 1.8, weapon: 'shotgun', cmdCd: 22000, radius: 34, rallyDur: 6000, rallyHeal: 45, rallyDmg: 1.3, rallySpeed: 1.25 };
@@ -187,7 +186,7 @@ function handleMessage(id, ws, m) {
       const name = (m.name || 'Hero').toString().slice(0, 16).replace(/[<>]/g, '');
       clients.set(id, { ws, role, name, color: PLAYER_COLORS[(id - 1) % PLAYER_COLORS.length] });
       if (role === 'player') addPlayer(id, m.class);
-      if (role === 'wizard') wizard = { mana: WIZARD.maxMana, cd: { heal: 0, meteor: 0, freeze: 0, rally: 0 }, x: -14, z: LANE.kingZ, a: 0, mx: 0, mz: 0 };
+      if (role === 'wizard') wizard = { mana: WIZARD.maxMana, cd: { heal: 0, meteor: 0, freeze: 0, rally: 0 }, x: -14, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: WIZARD.hp, maxHp: WIZARD.hp, alive: true, respawnAt: 0 };
       send(ws, { t: 'welcome', id, role, lane: LANE, weapons: WEAPONS, weaponOrder: WEAPON_ORDER, king: { radius: KING.radius, attacks: KING.attacks }, wizard: { maxMana: WIZARD.maxMana, spells: WIZARD.spells }, shop: SHOP, roundsTotal, perks: PERKS, perkOrder: PERK_ORDER, perkBuy: PERK_BUY, perkMax: PERK_MAX, weaponBuy: WEAPON_BUY, weaponBuyOrder: WEAPON_BUY_ORDER, camp: CAMP, cosmetics: COSMETICS, cosmeticSlots: COSMETIC_SLOTS, tune, tuneMeta: TUNE });
       broadcastRoster();
       break;
@@ -205,7 +204,7 @@ function handleMessage(id, ws, m) {
     // Client-authoritative King / Wizard position (same approach as players), clamped to their roam area.
     case 'kpos': { if (clients.get(id)?.role !== 'king') return; const nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; const fwd = (king.gateOpen || gate.hp <= 0) ? KING.sallyZ : KING.area.maxZ; king.x = clamp(nx, KING.area.minX, KING.area.maxX); king.z = clamp(nz, KING.area.minZ, fwd); if (typeof m.a === 'number') king.a = m.a; break; }
     case 'gate': { if (clients.get(id)?.role !== 'king') return; if (king.gateOpen) { if (king.z <= LANE.wallZ - 2) king.gateOpen = false; } else king.gateOpen = true; break; }
-    case 'wpos': { if (clients.get(id)?.role !== 'wizard' || !wizard) return; const nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; wizard.x = clamp(nx, WIZARD.area.minX, WIZARD.area.maxX); wizard.z = clamp(nz, WIZARD.area.minZ, WIZARD.area.maxZ); if (typeof m.a === 'number') wizard.a = m.a; break; }
+    case 'wpos': { if (clients.get(id)?.role !== 'wizard' || !wizard || !wizard.alive) return; const nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; const wfwd = (king.gateOpen || gate.hp <= 0) ? KING.sallyZ : WIZARD.area.maxZ; wizard.x = clamp(nx, WIZARD.area.minX, WIZARD.area.maxX); wizard.z = clamp(nz, WIZARD.area.minZ, wfwd); if (typeof m.a === 'number') wizard.a = m.a; break; }   // Wizard can sally out down the lane when the gate is open/down, just like the King
     case 'katk': kingAttack(id, m.kind, +m.x, +m.z); break;
     case 'spell': wizardSpell(id, m.kind, +m.x, +m.z); break;
     // Buy an Armor/upgrade at the camp's left stall with personal gold. Walk-up, combat OR intermission, stacks to PERK_MAX.
@@ -250,6 +249,7 @@ function startRound(n) {
   if (n === 1) pickGenerals();   // 3 random Generals as the game begins
   round = n; phase = 'combat'; phaseEndsAt = now() + combatMs; lastWaveAt = now();
   gate.hp = gate.maxHp; king.hp = king.maxHp; king.alive = true; king.gateOpen = false;   // fresh gate + full King each round (rounds 2+ must not start pre-breached)
+  if (wizard) { wizard.hp = wizard.maxHp; wizard.alive = true; wizard.respawnAt = 0; }   // Wizard back to full each round
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = now() + 700; p.gen = (p.gen || 0) + 1; p.buffUntil = 0; }
   ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 }; powerups = [];   // fresh ram frame + clear crates each round
   troops.clear(); friendlies.clear(); spawnWave(waveSize());   // cannon + camp builds PERSIST across rounds (permanent upgrades)
@@ -379,6 +379,11 @@ function damageKing(amount, byId) {
   king.hp -= amount; const p = players.get(byId); if (p) p.dmgDealt += amount;
   if (king.hp <= 0) { king.hp = 0; king.alive = false; endGame('attackers'); broadcast({ t: 'ev', kind: 'victory', by: byId, byName: clients.get(byId)?.name || '???' }); }
 }
+function damageWizard(amount, byId) {
+  if (!wizard || !wizard.alive || phase !== 'combat') return;
+  wizard.hp -= amount; const p = players.get(byId); if (p) p.dmgDealt += amount;
+  if (wizard.hp <= 0) { wizard.hp = 0; wizard.alive = false; wizard.respawnAt = now() + WIZARD.respawnMs; const kp = players.get(byId); if (kp) { kp.gold += 60; kp.kills++; } fxQueue.push({ k: 'boom', x: wizard.x, z: wizard.z, r: 7, c: 0xb07bff }); broadcast({ t: 'ev', kind: 'wizardown' }); }
+}
 function damageTroop(t, amount, ownerId) { t.hp -= amount; if (t.hp <= 0) { const champ = t.champion; fxQueue.push({ k: champ ? 'champdie' : 'troopdie', x: t.x, z: t.z }); troops.delete(t.id); const p = players.get(ownerId); if (p) { p.gold += champ ? GOLD.perTroopKill * 6 : GOLD.perTroopKill; p.kills++; } } }
 function damagePlayer(p, amount, src) {
   if (!p.alive) return; if (buffOn(p, 'shield')) { fxQueue.push({ k: 'troophit', x: p.x, z: p.z }); return; } p.hp -= amount;
@@ -394,8 +399,8 @@ function damagePlayer(p, amount, src) {
 function kingAttack(id, kind, tx, tz) {
   if (clients.get(id)?.role !== 'king' || phase !== 'combat' || !king.alive) return;
   const cfg = KING.attacks[kind]; if (!cfg) return; const t = now(); const cdMult = Math.max(0.5, 1 - 0.12 * king.up.swift); if (t - king.cd[kind] < cfg.cd * cdMult) return; king.cd[kind] = t;
-  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Grenade Barrage' }[kind] || kind), color: 0xffd23f });
-  if (kind === 'summon') { kingBarrage = { left: cfg.count || 20, nextAt: t, dmg: cfg.dmg, radius: cfg.radius, step: 1000 / (cfg.perSec || 5) }; fxQueue.push({ k: 'kingatk', kind: 'summon', x: king.x, z: king.z, r: 16 }); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }   // ULT: grenade barrage rains around the King over a few seconds
+  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Smite', slam: 'Ground Slam', laser: 'Death Beam', summon: 'CATACLYSM' }[kind] || kind), color: 0xffd23f });
+  if (kind === 'summon') { aoePlayers(king.x, king.z, cfg.radius, cfg.dmg); aoeBuildsFriendlies(king.x, king.z, cfg.radius, cfg.dmg); if (ram.active && Math.hypot(ram.x - king.x, ram.z - king.z) <= cfg.radius + 2) { ram.z = Math.min(RAM.startZ, ram.z + RAM.knockback); } fxQueue.push({ k: 'kingatk', kind: 'slam', x: king.x, z: king.z, r: cfg.radius }); broadcast({ t: 'ev', kind: 'kingatk', atk: 'slam' }); return; }   // ULT: one ENORMOUS ground slam around the King
   if (kind === 'laser') {
     // Delayed line beam: aim a ray from the King toward the click, telegraph it now, fire after cfg.delay.
     let dx = (+tx || king.x) - king.x, dz = (+tz || (king.z + 1)) - king.z; const dlen = Math.hypot(dx, dz) || 1; dx /= dlen; dz /= dlen;
@@ -414,7 +419,7 @@ function kingAttack(id, kind, tx, tz) {
   fxQueue.push({ k: 'kingatk', kind, x: cx, z: cz, r: cfg.radius }); broadcast({ t: 'ev', kind: 'kingatk', atk: kind });
 }
 function wizardSpell(id, kind, tx, tz) {
-  if (clients.get(id)?.role !== 'wizard' || !wizard || phase !== 'combat') return;
+  if (clients.get(id)?.role !== 'wizard' || !wizard || !wizard.alive || phase !== 'combat') return;
   const cfg = WIZARD.spells[kind]; if (!cfg) return; const t = now(); if (wizard.mana < cfg.mana || t - wizard.cd[kind] < cfg.cd) return;
   wizard.mana -= cfg.mana; wizard.cd[kind] = t;
   fxQueue.push({ k: 'castlabel', x: wizard.x, z: wizard.z, y: 20, text: (clients.get(id)?.name || 'The Wizard') + ': ' + ({ heal: 'Heal', meteor: 'Meteor', freeze: 'Frost Nova', rally: 'Rally' }[kind] || kind), color: 0xb07bff });
@@ -450,9 +455,9 @@ function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const c
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
   gold = TEST_GOLD != null ? TEST_GOLD : GOLD.start;
-  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = []; kingBarrage = null;
+  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = [];
   projectiles = []; troops.clear(); friendlies.clear(); powerups = []; initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
-  if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
+  if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; wizard.hp = wizard.maxHp; wizard.alive = true; wizard.respawnAt = 0; wizard.x = -14; wizard.z = LANE.kingZ; }
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; p.gen = (p.gen || 0) + 1; p.buffUntil = 0; }
   recomputeDefenses(); broadcast({ t: 'ev', kind: 'reset' });
 }
@@ -466,6 +471,7 @@ setInterval(() => { try {
   const _hStart = performance.now();
   const t = now(); const dt = Math.min(0.1, (t - last) / 1000); last = t;
   if (wizard) wizard.mana = Math.min(WIZARD.maxMana, wizard.mana + WIZARD.manaRegen * dt);
+  if (wizard && !wizard.alive && t >= wizard.respawnAt) { wizard.alive = true; wizard.hp = wizard.maxHp; wizard.x = -14; wizard.z = LANE.kingZ; }   // Wizard revives at the tower
   const combat = phase === 'combat';
   if (combat && players.size === 0) { if (!emptyCombatSince) emptyCombatSince = Date.now(); else if (Date.now() - emptyCombatSince > 5000) { emptyCombatSince = 0; resetGame(); return; } } else emptyCombatSince = 0;
   if (combat && t >= phaseEndsAt && king.alive) endRoundToIntermission();
@@ -481,8 +487,6 @@ setInterval(() => { try {
   if (combat && t - lastPowerupAt > 16000 && powerups.length < 2) { lastPowerupAt = t; const pk = POWERUPS[Math.floor(Math.random() * POWERUPS.length)]; powerups.push({ id: powerupId++, x: (Math.random() - 0.5) * LANE.halfWidth * 1.4, z: 10 + Math.random() * 95, kind: pk.kind }); }
   // Fire any telegraphed Death Beams whose charge has elapsed (drop them all if combat ends or the King dies).
   if (pendingLasers.length) { if (!combat || !king.alive) pendingLasers = []; else { for (let i = pendingLasers.length - 1; i >= 0; i--) { if (t >= pendingLasers[i].fireAt) { fireLaser(pendingLasers[i]); pendingLasers.splice(i, 1); } } } }
-  // Grenade-barrage ULT: drop one explosion at a random spot around the King every `step` ms until spent.
-  if (kingBarrage) { if (!combat || !king.alive || kingBarrage.left <= 0) kingBarrage = null; else if (t >= kingBarrage.nextAt) { kingBarrage.nextAt = t + kingBarrage.step; kingBarrage.left--; const ang = Math.random() * Math.PI * 2, dist = 3 + Math.random() * 12; const gx = clamp(king.x + Math.sin(ang) * dist, -LANE.halfWidth, LANE.halfWidth), gz = clamp(king.z + Math.cos(ang) * dist, LANE.duelZ, KING.area.maxZ); aoePlayers(gx, gz, kingBarrage.radius, kingBarrage.dmg); aoeBuildsFriendlies(gx, gz, kingBarrage.radius, kingBarrage.dmg); fxQueue.push({ k: 'boom', x: gx, z: gz, r: kingBarrage.radius, c: 0xff5522 }); } }
 
   const up = gateUp();
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer
@@ -585,6 +589,7 @@ setInterval(() => { try {
       if (hitT && Math.sqrt(hb) <= TROOP.radius + 0.6) { damageTroop(hitT, pr.dmg, pr.owner); done = true; }
       if (!done && !pr.antiUnit && up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
       if (!done && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius) { damageKing(pr.dmg, pr.owner); done = true; }
+      if (!done && !pr.antiUnit && wizard && wizard.alive && Math.hypot(pr.x - wizard.x, pr.z - wizard.z) <= WIZARD.radius) { damageWizard(pr.dmg, pr.owner); done = true; }
     }
     if (!done && pr.arc && pr.y <= 0) done = true;
     if (!done && (Math.abs(pr.x) > POCKET.outerX + 8 || pr.z < LANE.duelZ - 12 || pr.z > LANE.maxZ + 8 || t - pr.born > 4000 || (pr.range && (pr.x - pr.ox) ** 2 + (pr.z - pr.oz) ** 2 >= pr.range * pr.range))) done = true;
@@ -593,6 +598,7 @@ setInterval(() => { try {
         if (!pr.gateOnly) for (const tr of troops.values()) if (Math.hypot(tr.x - pr.x, tr.z - pr.z) <= pr.splash + TROOP.radius) damageTroop(tr, pr.dmg * 0.6, pr.owner);
         if (!pr.antiUnit && up && pr.z <= LANE.wallZ + pr.splash) damageGate(pr.dmg * 0.5);
         else if (!pr.gateOnly && !pr.antiUnit && !up && king.alive && Math.hypot(pr.x - king.x, pr.z - king.z) <= KING.radius + pr.splash) damageKing(pr.dmg * 0.5, pr.owner);
+        if (!pr.gateOnly && !pr.antiUnit && wizard && wizard.alive && Math.hypot(pr.x - wizard.x, pr.z - wizard.z) <= WIZARD.radius + pr.splash) damageWizard(pr.dmg * 0.5, pr.owner);
         fxQueue.push({ k: 'boom', x: pr.x, z: pr.z, r: pr.splash, c: WEAPONS[pr.wep].color });
       }
     } else keep.push(pr);
@@ -614,7 +620,7 @@ setInterval(() => { try {
     timeLeft: (phase === 'combat' || phase === 'intermission') ? Math.max(0, phaseEndsAt - t) : 0,
     gold, gate: { hp: Math.round(gate.hp), maxHp: Math.round(gate.maxHp), open: king.gateOpen ? 1 : 0 },
     king: { x: +king.x.toFixed(1), z: +king.z.toFixed(1), a: +king.a.toFixed(2), hp: Math.round(king.hp), maxHp: king.maxHp, alive: king.alive ? 1 : 0, vulnerable: (!up && combat) ? 1 : 0, guards: guardCount(), up: king.up },
-    wizard: wizard ? { mana: Math.round(wizard.mana), x: +wizard.x.toFixed(1), z: +wizard.z.toFixed(1), a: +wizard.a.toFixed(2) } : null,
+    wizard: wizard ? { mana: Math.round(wizard.mana), x: +wizard.x.toFixed(1), z: +wizard.z.toFixed(1), a: +wizard.a.toFixed(2), hp: Math.round(wizard.hp), maxHp: wizard.maxHp, alive: wizard.alive ? 1 : 0 } : null,
     players: ps, proj: prj, troops: trp,
     ...(sendWorld ? { trees: trees_, ironNodes: iron_, lead: lead_ } : {}),
     wood: ram.bw, iron: ram.bi, woodNeeded: woodNeeded(), ironNeeded: ironNeeded(),

@@ -71,6 +71,7 @@
     <div class="blabel" id="gateLabel">CASTLE GATE</div><div class="bar"><div id="gateFill" style="width:100%"></div></div>
     <div class="blabel">KING</div><div class="bar"><div id="hpFill" style="width:100%"></div></div>
     <div class="blabel">MANA</div><div class="bar"><div id="manaFill" style="width:100%"></div></div>
+    <div class="blabel">YOU (WIZARD)</div><div class="bar"><div id="wizFill" style="width:100%;background:linear-gradient(90deg,#b07bff,#ff7adf)"></div></div>
   </div>
   <div id="status"></div>
   <div class="hint">WASD walk the hilltop &nbsp;•&nbsp; aim with the cursor, press 1-4 to cast INSTANTLY. Heal targets the King; Rally summons guards.</div>
@@ -95,7 +96,7 @@
 <script type="module">
 import { createWorld } from './scene.js';
 import { connect } from './net.js';
-import { HILL, WIZ_TOWER, LANE, WIZARD } from './shared.js';
+import { HILL, WIZ_TOWER, LANE, WIZARD, KING } from './shared.js';
 import { Sound } from './sound.js';
 const $=s=>document.querySelector(s);
 const world=createWorld($('#c'), { quality:'high' });
@@ -142,7 +143,7 @@ addEventListener('keydown', e=>{ const n=parseInt(e.key); if(n>=1&&n<=4){ selSpe
 let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0), aim=new THREE.Vector3();
 addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
 addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls,#spells')) cast(); });
-function cast(kind){ kind=kind||selSpell; if(!spells||lastSnap?.phase!=='combat') return; const sp=spells[kind]; const now=Date.now();
+function cast(kind){ kind=kind||selSpell; if(!spells||lastSnap?.phase!=='combat'||!lastSnap?.wizard?.alive) return; const sp=spells[kind]; const now=Date.now();
   if(now-lastCast[kind]<sp.cd) return;                                  // still on cooldown
   if(lastSnap?.wizard && lastSnap.wizard.mana < sp.mana){ $('#status').textContent='Not enough mana!'; return; }   // NO cooldown on a failed (no-mana) cast
   lastCast[kind]=now; net.send({t:'spell',kind,x:aim.x,z:aim.z}); }
@@ -156,12 +157,13 @@ let running=false,lastT=performance.now();
 function startLoop(){ if(running)return; running=true; requestAnimationFrame(loop); }
 function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
   const sw=lastSnap&&lastSnap.wizard;
-  if(sw){
+  if(sw && sw.alive!==0){
     if(!wpos) wpos={x:sw.x, z:sw.z};
     // CLIENT-AUTHORITATIVE Wizard movement: simulate locally for instant response.
     let mx=(wkeys['a']?1:0)-(wkeys['d']?1:0), mz=(wkeys['w']?1:0)-(wkeys['s']?1:0); const L=Math.hypot(mx,mz); if(L>1){mx/=L;mz/=L;}
     wpos.x += mx*WIZARD.moveSpeed*dt; wpos.z += mz*WIZARD.moveSpeed*dt;
-    wpos.x=clampN(wpos.x, WIZARD.area.minX, WIZARD.area.maxX); wpos.z=clampN(wpos.z, WIZARD.area.minZ, WIZARD.area.maxZ);
+    const wSally = lastSnap.gate && (lastSnap.gate.open || lastSnap.gate.hp<=0); const wFwd = wSally ? KING.sallyZ : WIZARD.area.maxZ;
+    wpos.x=clampN(wpos.x, WIZARD.area.minX, WIZARD.area.maxX); wpos.z=clampN(wpos.z, WIZARD.area.minZ, wFwd);
     const dx=sw.x-wpos.x, dz=sw.z-wpos.z; if(dx*dx+dz*dz>36){wpos.x=sw.x;wpos.z=sw.z;} else {wpos.x+=dx*0.08;wpos.z+=dz*0.08;}
     world.setWizPos(wpos.x, wpos.z, Math.atan2(aim.x-wpos.x, aim.z-wpos.z));
   }
@@ -175,10 +177,12 @@ function fmt(ms){ const s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60)
 function updateHud(m){
   $('#gateFill').style.width=(m.gate.maxHp?m.gate.hp/m.gate.maxHp*100:0)+'%';
   $('#hpFill').style.width=(m.king.maxHp?m.king.hp/m.king.maxHp*100:0)+'%';
-  if(m.wizard) $('#manaFill').style.width=m.wizard.mana+'%';
+  if(m.wizard){ $('#manaFill').style.width=m.wizard.mana+'%'; $('#wizFill').style.width=(m.wizard.maxHp?m.wizard.hp/m.wizard.maxHp*100:0)+'%'; }
   $('#gateLabel').textContent = m.gate.hp>0?'CASTLE GATE':'GATE BREACHED - guard the King!';
   $('#gold').textContent=(m.gold||0)+' gold';
-  $('#status').textContent = m.phase==='combat'?`ROUND ${m.round}/${m.roundsTotal}  -  ${fmt(m.timeLeft)}`:m.phase==='intermission'?`INTERMISSION  -  ${Math.ceil(m.timeLeft/1000)}s`:m.phase==='lobby'?'Waiting to start':'';
+  const wizDown = m.wizard && !m.wizard.alive;
+  $('#status').style.color = wizDown ? '#ff6688' : '';
+  $('#status').textContent = wizDown ? '💀 YOU ARE DOWN — reviving at the tower…' : (m.phase==='combat'?`ROUND ${m.round}/${m.roundsTotal}  -  ${fmt(m.timeLeft)}`:m.phase==='intermission'?`INTERMISSION  -  ${Math.ceil(m.timeLeft/1000)}s`:m.phase==='lobby'?'Waiting to start':'');
   $('#shop').style.display = m.phase==='intermission'?'flex':'none';
   if(m.gold!==lastGold){ lastGold=m.gold; document.querySelectorAll('.item').forEach(el=>el.classList.toggle('poor', m.gold<+el.dataset.cost)); }
 }

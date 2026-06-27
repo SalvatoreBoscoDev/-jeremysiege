@@ -435,7 +435,7 @@ export function createWorld(canvas, opts = {}) {
 
   function applySnapshot(s) {
     if (!localKing) { kingT.x = s.king.x; kingT.z = s.king.z; kingT.a = s.king.a; } kingT.vuln = s.king.vulnerable; kingT.alive = s.king.alive;
-    if (s.wizard && typeof s.wizard.x === 'number') { if (!localWizard) { wizT.x = s.wizard.x; wizT.z = s.wizard.z; wizT.a = s.wizard.a; } wizT.has = 1; }
+    if (s.wizard && typeof s.wizard.x === 'number') { if (!localWizard) { wizT.x = s.wizard.x; wizT.z = s.wizard.z; wizT.a = s.wizard.a; } wizT.has = 1; wizT.alive = s.wizard.alive; }
     const seen = new Set();
     for (const pp of s.players) {
       const [id, x, z, a, hpFrac, wep, alive, slowed, general] = pp; seen.add(id);
@@ -498,7 +498,7 @@ export function createWorld(canvas, opts = {}) {
     // Wizard walks the hilltop too
     wiz.position.x += (wizT.x - wiz.position.x) * k;
     wiz.position.z += (wizT.z - wiz.position.z) * k;
-    wiz.position.y = HILL.height;
+    wiz.position.y = HILL.height; wiz.visible = !!wizT.has && wizT.alive !== 0;
     if (wizT.has) wiz.rotation.y += angDiff(wizT.a, wiz.rotation.y) * k;
     kModel.position.y = Math.sin(performance.now() / 700) * 0.4; // idle bob
     cape.rotation.x = 0.18 + Math.sin(performance.now() / 900) * 0.06;

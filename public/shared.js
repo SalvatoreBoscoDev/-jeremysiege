@@ -42,9 +42,9 @@ export const KING = {
   area: { minX: -26, maxX: 26, minZ: LANE.kingZ - 22, maxZ: LANE.kingZ + 22 }, // stays on the hilltop mesa
   attacks: {
     slam:   { cd: 2500, dmg: 55,  radius: 14, desc: 'Ground Slam (around the King)' },
-    cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Catapult shot (aimed)' },
+    cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Smite (aimed)' },
     laser:  { cd: 4500, dmg: 95,  range: 78, width: 6, delay: 1050, desc: 'Death Beam (delayed line)' },
-    summon: { cd: 120000, dmg: 35, radius: 6, count: 20, perSec: 5, desc: 'ULT: Grenade Barrage' },
+    summon: { cd: 120000, dmg: 130, radius: 42, desc: 'ULT: Cataclysm Slam' },
   },
 };
 
@@ -121,6 +121,7 @@ export const CANNON = {
 export const WIZARD = {
   maxMana: 100,
   manaRegen: 12,
+  hp: 260, radius: 1.9, respawnMs: 12000,   // the Wizard can be killed if attackers reach him; revives at the tower after this
   moveSpeed: 15,   // the Wizard walks the hilltop with the King
   area: { minX: -26, maxX: 30, minZ: LANE.kingZ - 22, maxZ: LANE.kingZ + 22 }, // hilltop mesa
   spells: {
