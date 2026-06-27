@@ -447,8 +447,8 @@ function fireLaser(L) {
 }
 
 // ---------- troops ----------
-function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
-function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
+function waveSize() { if (TEST_WALK) return 30; return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
+function maxAlive() { if (TEST_WALK) return WAVE.maxAliveHardCap; return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
 function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { const sx = (Math.random() - 0.5) * LANE.halfWidth * 1.8; const tr = { id: troopId, x: sx, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }; if (TEST_WALK) { const r = Math.random(); tr.dest = r < 0.5 ? { x: sx, z: 118 } : r < 0.75 ? { x: -39, z: 112 } : { x: 38, z: 112 }; }   /* 50% straight up the lane, 25% to the WOOD pocket (left), 25% to the IRON pocket (right) */ troops.set(troopId, tr); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
 function resetGame() {
