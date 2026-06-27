@@ -592,7 +592,8 @@ setInterval(() => { try {
 
   if (t - lastSnapAt >= SNAP_MS) { lastSnapAt = t;
   // Broadcast row = only what's needed to RENDER a player to everyone. Private per-owner data (gold/carry/rally/respawn-token) goes out on the 'me' channel below.
-  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.max(0, Math.min(100, Math.round(p.hp / effMaxHp(p) * 100))), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, p.general ? 1 : 0]);
+  // gen (respawn token) MUST ride with position so the server's pos-gating stays in lockstep — keep it in the broadcast. Only the heavy private data (gold/carry/rally) goes on the 'me' channel.
+  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.max(0, Math.min(100, Math.round(p.hp / effMaxHp(p) * 100))), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, p.general ? 1 : 0, p.gen]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
   const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]);   // client only reads id,x,z — hp fraction was dead weight
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
@@ -620,7 +621,7 @@ setInterval(() => { try {
   }
   // Private channel: send each player ONLY their own gold/carry/rally/respawn-token (49 other clients don't need it).
   if (t - lastMeAt >= ME_MS) { lastMeAt = t;
-    for (const [cid, c] of clients) { if (c.role !== 'player') continue; const p = players.get(cid); if (!p) continue; send(c.ws, { t: 'me', gold: p.gold, w: p.carry.w, i: p.carry.i, rally: t < (p.rallyUntil || 0) ? 1 : 0, gen: p.gen }); }
+    for (const [cid, c] of clients) { if (c.role !== 'player') continue; const p = players.get(cid); if (!p) continue; send(c.ws, { t: 'me', gold: p.gold, w: p.carry.w, i: p.carry.i, rally: t < (p.rallyUntil || 0) ? 1 : 0 }); }
   }
   const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
   if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }

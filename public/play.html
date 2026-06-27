@@ -170,7 +170,7 @@ const net = connect({
   welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; cosmeticsCat=m.cosmetics; cosmeticSlots=m.cosmeticSlots||[]; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); buildCosmetics(); },
   roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); if(world.setGeneral) world.setGeneral(m.general); updateHud(m); },
-  me(m){ myGold=m.gold; myCarryW=m.w; myCarryI=m.i; myRally=m.rally; myGen=m.gen; },   // private stats: not in the broadcast
+  me(m){ myGold=m.gold; myCarryW=m.w; myCarryI=m.i; myRally=m.rally; },   // private stats: not in the broadcast (gen rides in the snapshot)
 
   event(ev){
     if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
@@ -236,6 +236,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
   const me=lastSnap?lastSnap.players.find(p=>p[0]===myId):null;
   if(me){
     const sx=me[1], sz=me[2], alive=me[6], slowed=me[7];
+    if(me[9]!=null) myGen=me[9];                                // respawn token rides in the snapshot (lockstep with position)
     if(!myPos) myPos={x:sx,z:sz};
     if(!alive){ myPos.x=sx; myPos.z=sz; myWasDead=true; }       // dead: follow the server
     else {
