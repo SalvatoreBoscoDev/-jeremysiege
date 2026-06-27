@@ -159,7 +159,7 @@ initForest(); initIron(); recomputeDefenses();
 function nearestNode(map, x, z, rad) { let best = null, bd = Infinity; for (const n of map.values()) { if (!n.alive) continue; const d = (n.x - x) ** 2 + (n.z - z) ** 2; if (d < bd) { bd = d; best = n; } } return best && bd <= rad * rad ? best : null; }
 
 function playerSpawn() { return [(Math.random() - 0.5) * 16, LANE.playerSpawnZ - Math.random() * 6]; }   // center-back of the camp
-function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, general: false, rallyUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
+function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_ORDER.includes(cls) ? cls : 'blaster'; players.set(id, { id, x, z, a: Math.PI, mx: 0, mz: 0, hp: PLAYER.maxHp, alive: true, gen: 1, wep, cls: wep, abilityAt: 0, lastShot: 0, respawnAt: 0, slowUntil: 0, general: false, rallyUntil: 0, kills: 0, deaths: 0, dmgDealt: 0, gold: TEST_PGOLD != null ? TEST_PGOLD : 0, carry: { w: 0, i: 0 }, perks: { tough: 0, dmg: 0, respawn: 0, swift: 0 }, perkRound: -1, cos: { hat: 'none', cape: 'none', helmet: 'none' }, cosOwned: [] }); recomputeDefenses(); }
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server });
@@ -190,7 +190,7 @@ function handleMessage(id, ws, m) {
     // Client-authoritative position: the client simulates its own movement and reports it.
     // We trust x/z but still clamp to the lane and in front of a standing gate so nobody
     // can walk through walls / into the castle and break the game (integrity, not anti-cheat).
-    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz, (!gateUp() && phase === 'combat') ? LANE.duelZ : undefined); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
+    case 'pos': { const p = players.get(id); if (!p || !p.alive) break; if (m.g != null && m.g !== p.gen) break; if (p.spawnGuard && now() < p.spawnGuard) break; let nx = +m.x, nz = +m.z; if (!Number.isFinite(nx) || !Number.isFinite(nz)) break; [nx, nz] = clampToLane(nx, nz, (!gateUp() && phase === 'combat') ? LANE.duelZ : undefined); if (gateUp() && phase === 'combat' && nz < LANE.wallZ + 3.5) nz = LANE.wallZ + 3.5; p.x = nx; p.z = nz; if (typeof m.a === 'number') p.a = m.a; break; }
     case 'fire': playerFire(id); break;
     case 'ability': playerAbility(id); break;
     case 'command': { if (id !== general) break; const p = players.get(id); if (!p || !p.alive || phase !== 'combat') break; const t = now(); if (t - cmdCd < GEN.cmdCd) break; cmdCd = t; rallyCommand(p); break; }
@@ -253,7 +253,7 @@ function startRound(n) {
   if (n === 1 && !general) electGeneral();   // crown the voted General as the game begins
   round = n; phase = 'combat'; phaseEndsAt = now() + combatMs; lastWaveAt = now();
   gate.hp = gate.maxHp; king.hp = king.maxHp; king.alive = true; king.gateOpen = false;   // fresh gate + full King each round (rounds 2+ must not start pre-breached)
-  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; }
+  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = now() + 700; p.gen = (p.gen || 0) + 1; }
   ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };   // fresh ram frame each round
   troops.clear(); friendlies.clear(); spawnWave(waveSize());   // cannon + camp builds PERSIST across rounds (permanent upgrades)
   broadcast({ t: 'ev', kind: 'round', round: n, total: roundsTotal });
@@ -457,7 +457,7 @@ function resetGame() {
   king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = [];
   projectiles = []; troops.clear(); friendlies.clear(); initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
   if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
-  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; }
+  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; p.gen = (p.gen || 0) + 1; }
   recomputeDefenses(); broadcast({ t: 'ev', kind: 'reset' });
 }
 
@@ -487,7 +487,7 @@ setInterval(() => { try {
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer
   // integrates mx/mz for players; it only handles respawn and re-clamps if the gate just dropped.
   for (const p of players.values()) {
-    if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = t + 500; } continue; }   // spawnGuard: ignore the client's stale death position for a moment so respawn sticks at the back
+    if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = t + 700; p.gen = (p.gen || 0) + 1; } continue; }   // spawnGuard: ignore the client's stale death position for a moment so respawn sticks at the back
     if (up && p.z < LANE.wallZ + 3.5) p.z = LANE.wallZ + 3.5;   // keep attackers in FRONT of a standing gate
   }
 
@@ -511,7 +511,7 @@ setInterval(() => { try {
     const reach = ttype === 'build' ? (tgt.r + TROOP.attackRange) : TROOP.attackRange;
     if (d > reach) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
     else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t;
-      if (ttype === 'player') { damagePlayer(tgt, TROOP.dmg * tune.troopDmg); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
+      if (ttype === 'player') { damagePlayer(tgt, TROOP.dmg * tune.troopDmg, { x: tr.x, z: tr.z }); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
       else if (ttype === 'friendly') { tgt.hp -= TROOP.dmg; if (tgt.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tgt.x, z: tgt.z }); friendlies.delete(tgt.id); } }
       else if (ttype === 'build') { damageBuildStruct(tgt, TROOP.dmg); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
     }
@@ -547,7 +547,7 @@ setInterval(() => { try {
   if (combat) for (const tw of towers) {
     if (t - tw.lastShot < TOWER.cd) continue;
     let tp = null, best = TOWER.range * TOWER.range; for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - tw.x) ** 2 + (p.z - tw.z) ** 2; if (d < best) { best = d; tp = p; } }
-    if (tp) { tw.lastShot = t; damagePlayer(tp, TOWER.dmg); fxQueue.push({ k: 'arrow', x: tw.x, z: tw.z, tx: tp.x, tz: tp.z }); }
+    if (tp) { tw.lastShot = t; damagePlayer(tp, TOWER.dmg, { x: tw.x, z: tw.z }); fxQueue.push({ k: 'arrow', x: tw.x, z: tw.z, tx: tp.x, tz: tp.z }); }
   }
 
   if (combat && ram.active) {
@@ -566,7 +566,7 @@ setInterval(() => { try {
     if (!done && pr.foe) {
       // enemy arrow: damage the nearest attacker it touches
       let hp_ = null, hb2 = Infinity; for (const p of players.values()) { if (!p.alive) continue; const d = (p.x - pr.x) ** 2 + (p.z - pr.z) ** 2; if (d < hb2) { hb2 = d; hp_ = p; } }
-      if (hp_ && Math.sqrt(hb2) <= 1.5) { damagePlayer(hp_, pr.dmg); fxQueue.push({ k: 'troophit', x: hp_.x, z: hp_.z }); done = true; }
+      if (hp_ && Math.sqrt(hb2) <= 1.5) { damagePlayer(hp_, pr.dmg, { x: pr.x, z: pr.z }); fxQueue.push({ k: 'troophit', x: hp_.x, z: hp_.z }); done = true; }
     } else if (!done && pr.gateOnly) {
       if (up && pr.z <= LANE.wallZ) { damageGate(pr.dmg); done = true; }
     } else if (!done) {
@@ -588,7 +588,7 @@ setInterval(() => { try {
   }
   projectiles = keep;
 
-  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i, p.general ? 1 : 0, t < (p.rallyUntil || 0) ? 1 : 0]);
+  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i, p.general ? 1 : 0, t < (p.rallyUntil || 0) ? 1 : 0, p.gen]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
   const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1), +(tr.hp / TROOP.hp).toFixed(2)]);
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
