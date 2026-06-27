@@ -40,6 +40,9 @@
   #ballot .bcd .bn { font-size:18px; font-weight:900; } #ballot .bcd .bv { font-size:30px; font-weight:900; color:#ffd23f; }
   #crown { position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:radial-gradient(circle at 50% 40%,#2a1c40dd,#0a0c14ee); z-index:6; }
   #crown h1 { font-size:66px; font-weight:900; color:#ffd23f; text-shadow:0 3px 22px #000; } #crown p { font-size:26px; opacity:.92; }
+  #flash { position:fixed; top:44%; left:50%; transform:translate(-50%,-50%); opacity:0; text-align:center; font-size:62px; font-weight:900; letter-spacing:2px; text-shadow:0 4px 24px #000, 0 0 34px currentColor; z-index:7; pointer-events:none; white-space:nowrap; }
+  #flash.show { animation:flashpop 1.7s cubic-bezier(.2,.8,.2,1); }
+  @keyframes flashpop { 0%{opacity:0;transform:translate(-50%,-50%) scale(.6)} 12%{opacity:1;transform:translate(-50%,-50%) scale(1.1)} 24%{transform:translate(-50%,-50%) scale(1)} 78%{opacity:1} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.05)} }
 </style>
 </head>
 <body>
@@ -55,6 +58,7 @@
 </div>
 <div id="big"><h1 id="bigh">JEREMY HAS FALLEN!</h1><p id="bigsub"></p></div>
 <div id="crown"><h1>👑 GENERAL CROWNED</h1><p id="crownName"></p></div>
+<div id="flash"></div>
 
 <script src="./vendor/qrcode.js"></script>
 <script type="module">
@@ -77,7 +81,11 @@ const net=connect({
       let html=win?'The horde stormed the castle!':'Jeremy survived every round.';
       if(ev.mvp) html+=`<div class="mvp">🏆 MVP: ${ev.mvp.name} — ${ev.mvp.kills} kills</div>`;
       if(ev.board&&ev.board.length) html+='<div class="board">'+ev.board.slice(0,5).map((b,i)=>`${i+1}. ${b.general?'👑 ':''}${b.name} — ${b.kills}k / ${b.deaths}d`).join('<br>')+'</div>';
-      $('#bigsub').innerHTML=html; $('#big').style.display='flex'; Sound[win?'win':'lose'](); }
+      $('#bigsub').innerHTML=html; const showOver=()=>{ $('#big').style.display='flex'; Sound[win?'win':'lose'](); }; if(win) setTimeout(showOver, 1900); else showOver(); }   // let the FINAL BLOW moment breathe before the scoreboard
+    else if(ev.kind==='victory'){ flash('FINAL BLOW — '+(ev.byName||'A hero')+'!', '#ff3366'); slowmoUntil=performance.now()+1800; Sound.explosion(true); }
+    else if(ev.kind==='streak'){ flash(ev.name+' — '+ev.label+'!', '#ff5a2a'); addFeed('🔥 '+ev.name+' '+ev.label+' (+'+ev.gold+'g)'); Sound.streak(); }
+    else if(ev.kind==='champdown'){ flash(ev.name+' SLEW A CHAMPION!', '#ffcf3a'); addFeed('⚔️ '+ev.name+' downed a Champion'); Sound.streak(); }
+    else if(ev.kind==='powerup'){ flash('⚡ '+ev.label+'!', ev.color||'#8fe3ff'); addFeed('⚡ '+(ev.name||'A hero')+' grabbed '+ev.label); }
     else if(ev.kind==='general'){ $('#crownName').textContent=(ev.name||'A hero')+' leads the siege!'; $('#crown').style.display='flex'; setTimeout(()=>$('#crown').style.display='none', 4500); addFeed('👑 '+(ev.name||'A hero')+' elected General'); Sound.round(); }
     else if(ev.kind==='reset'){ $('#big').style.display='none'; $('#crown').style.display='none'; }
     else if(ev.kind==='round'){ addFeed('ROUND '+ev.round+' / '+ev.total); Sound.round(); } else if(ev.kind==='intermission'){ addFeed('Intermission - shopping'); Sound.intermission(); }
@@ -94,8 +102,10 @@ function renderBallot(m){ const B=$('#ballot');
   if(m.phase==='lobby'&&m.ballot&&m.ballot.length){ B.style.display='block'; B.innerHTML='<div class="bt">👑 VOTE YOUR GENERAL</div><div class="bs">Tap a name on your phone</div><div class="bc">'+m.ballot.map(([cid,name,tally])=>`<div class="bcd"><div class="bn">${name}</div><div class="bv">${tally}</div></div>`).join('')+'</div>'; }
   else B.style.display='none'; }
 
-let lastT=performance.now();
-function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt);
+let lastT=performance.now(), slowmoUntil=0;
+const flashEl=$('#flash');
+function flash(txt,color){ flashEl.textContent=txt; flashEl.style.color=color||'#ffd23f'; flashEl.classList.remove('show'); void flashEl.offsetWidth; flashEl.classList.add('show'); }
+function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt * (now < slowmoUntil ? 0.25 : 1));
   const a=now/16000; camera.position.set(Math.sin(a)*40, 60, 76); camera.lookAt(Math.sin(a)*10, 6, -30);
   world.render(camera); requestAnimationFrame(loop);
 }

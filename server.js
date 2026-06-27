@@ -56,6 +56,14 @@ let projId = 1, projectiles = [];
 let troopId = 1; const troops = new Map();
 const fxQueue = [];
 let lastWaveAt = 0;
+// ---- Power-up crates: drop in the lane, grab for a timed buff ----
+let powerups = []; let powerupId = 1; let lastPowerupAt = 0;
+const POWERUPS = [
+  { kind: 'rage',   label: 'RAGE',   color: 0xff3322, dur: 7000 },   // faster fire + harder hits
+  { kind: 'shield', label: 'SHIELD', color: 0x33ccff, dur: 7000 },   // brief invulnerability
+  { kind: 'haste',  label: 'HASTE',  color: 0xffe23a, dur: 7000 },   // +50% move speed (client-side)
+];
+const buffOn = (p, kind) => p.buffKind === kind && now() < (p.buffUntil || 0);
 const trees = new Map(); let treeId = 1;       // WOOD (left)
 const irons = new Map(); let ironId = 1;        // IRON (right)
 // The ram is a dump-built site: players haul wood/iron and dump it in (bw/bi) until it's built, then it deploys & is pushable.
@@ -149,7 +157,7 @@ function guardCount() { let n = 0; for (const t of troops.values()) if (t.hp > 0
 function woodNeeded() { return TEST_WOOD != null ? TEST_WOOD : clamp(Math.round(RAM.woodNeededBase + RAM.woodNeededPerPlayer * attackerCount()), RAM.woodNeededBase, RAM.woodNeededMax); }
 function ironNeeded() { return TEST_IRON != null ? TEST_IRON : clamp(Math.round(RAM.ironNeededBase + RAM.ironNeededPerPlayer * attackerCount()), RAM.ironNeededBase, RAM.ironNeededMax); }
 function effMaxHp(p) { return (PLAYER.maxHp + p.perks.tough * PERK_FX.hp) * (p.general ? GEN.hpMult * tune.general : 1); }
-function dmgMult(p) { return (1 + p.perks.dmg * PERK_FX.dmg) * (now() < (p.rallyUntil || 0) ? GEN.rallyDmg : 1); }
+function dmgMult(p) { return (1 + p.perks.dmg * PERK_FX.dmg) * (now() < (p.rallyUntil || 0) ? GEN.rallyDmg : 1) * (buffOn(p, 'rage') ? 1.7 : 1); }
 function speedMult(p) { return 1 + p.perks.swift * PERK_FX.speed; }
 function respawnDelay(p) { return Math.max(1200, PLAYER.respawnMs - p.perks.respawn * PERK_FX.respawnMs); }
 
@@ -253,8 +261,8 @@ function startRound(n) {
   if (n === 1 && !general) electGeneral();   // crown the voted General as the game begins
   round = n; phase = 'combat'; phaseEndsAt = now() + combatMs; lastWaveAt = now();
   gate.hp = gate.maxHp; king.hp = king.maxHp; king.alive = true; king.gateOpen = false;   // fresh gate + full King each round (rounds 2+ must not start pre-breached)
-  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = now() + 700; p.gen = (p.gen || 0) + 1; }
-  ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };   // fresh ram frame each round
+  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = now() + 700; p.gen = (p.gen || 0) + 1; p.streak = 0; p.buffUntil = 0; }
+  ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 }; powerups = [];   // fresh ram frame + clear crates each round
   troops.clear(); friendlies.clear(); spawnWave(waveSize());   // cannon + camp builds PERSIST across rounds (permanent upgrades)
   broadcast({ t: 'ev', kind: 'round', round: n, total: roundsTotal });
 }
@@ -354,7 +362,7 @@ function playerFire(id) {
     else if (Math.hypot(p.x - (CANNON.x + CANNON.cogDX), p.z - CANNON.z) <= CANNON.stationR) { cannon.eUntil = t + 250; }
     return;
   }
-  if (t - p.lastShot < w.cd) return; p.lastShot = t;
+  const fireCd = w.cd * (buffOn(p, 'rage') ? 0.4 : 1); if (t - p.lastShot < fireCd) return; p.lastShot = t;
   const dm = dmgMult(p);
   for (let i = 0; i < w.pellets; i++) { const spread = w.pellets > 1 ? (Math.random() - 0.5) * 0.34 : (Math.random() - 0.5) * 0.03; const a = p.a + spread; projectiles.push({ id: projId++, owner: id, wep: p.wep, x: p.x, y: 1.2, z: p.z, ox: p.x, oz: p.z, range: w.range || 80, vx: Math.sin(a) * w.speed, vz: Math.cos(a) * w.speed, vy: w.arc ? 9 : 0, arc: w.arc, born: t, splash: w.splash, dmg: w.dmg * dm * tune.playerDmg }); }
   fxQueue.push({ k: 'muzzle', x: p.x, z: p.z, c: w.color });
@@ -382,11 +390,14 @@ function damageKing(amount, byId) {
   king.hp -= amount; const p = players.get(byId); if (p) p.dmgDealt += amount;
   if (king.hp <= 0) { king.hp = 0; king.alive = false; endGame('attackers'); broadcast({ t: 'ev', kind: 'victory', by: byId, byName: clients.get(byId)?.name || '???' }); }
 }
-function damageTroop(t, amount, ownerId) { t.hp -= amount; if (t.hp <= 0) { fxQueue.push({ k: 'troopdie', x: t.x, z: t.z }); troops.delete(t.id); const p = players.get(ownerId); if (p) { p.gold += GOLD.perTroopKill; p.kills++; } } }
+// Kill streaks: consecutive kills without dying. Hitting a tier pays bonus gold and flashes a callout on every screen.
+const STREAK_TIERS = [{ n: 3, label: 'RAMPAGE', gold: 25 }, { n: 5, label: 'DOMINATING', gold: 50 }, { n: 8, label: 'UNSTOPPABLE', gold: 100 }, { n: 12, label: 'GODLIKE', gold: 250 }];
+function bumpStreak(p, id) { p.streak = (p.streak || 0) + 1; const tier = STREAK_TIERS.find(s => s.n === p.streak); if (tier) { p.gold += tier.gold; broadcast({ t: 'ev', kind: 'streak', name: clients.get(id)?.name || 'A hero', label: tier.label, gold: tier.gold, streak: p.streak }); } }
+function damageTroop(t, amount, ownerId) { t.hp -= amount; if (t.hp <= 0) { const champ = t.champion; fxQueue.push({ k: champ ? 'champdie' : 'troopdie', x: t.x, z: t.z }); troops.delete(t.id); const p = players.get(ownerId); if (p) { p.gold += champ ? GOLD.perTroopKill * 6 : GOLD.perTroopKill; p.kills++; bumpStreak(p, ownerId); if (champ) broadcast({ t: 'ev', kind: 'champdown', name: clients.get(ownerId)?.name || 'A hero' }); } } }
 function damagePlayer(p, amount, src) {
-  if (!p.alive) return; p.hp -= amount;
+  if (!p.alive) return; if (buffOn(p, 'shield')) { fxQueue.push({ k: 'troophit', x: p.x, z: p.z }); return; } p.hp -= amount;
   if (p.hp <= 0) {
-    p.alive = false; p.hp = 0; p.deaths++; p.respawnAt = now() + respawnDelay(p); if (phase === 'combat') gold += GOLD.perKill;
+    p.alive = false; p.hp = 0; p.deaths++; p.streak = 0; p.respawnAt = now() + respawnDelay(p); if (phase === 'combat') gold += GOLD.perKill;
     const fx = { k: 'death', x: p.x, z: p.z, id: p.id };
     if (src) { let dx = p.x - src.x, dz = p.z - src.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d; const sp = 34 + Math.random() * 16; fx.fling = 1; fx.vx = +(dx * sp).toFixed(1); fx.vz = +(dz * sp).toFixed(1); fx.vy = +(24 + Math.random() * 14).toFixed(1); }
     fxQueue.push(fx);
@@ -398,7 +409,7 @@ function kingAttack(id, kind, tx, tz) {
   if (clients.get(id)?.role !== 'king' || phase !== 'combat' || !king.alive) return;
   const cfg = KING.attacks[kind]; if (!cfg) return; const t = now(); const cdMult = Math.max(0.5, 1 - 0.12 * king.up.swift); if (t - king.cd[kind] < cfg.cd * cdMult) return; king.cd[kind] = t;
   fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Summon Wave' }[kind] || kind), color: 0xffd23f });
-  if (kind === 'summon') { const cap = Math.min(WAVE.maxAliveHardCap, guardCount() + cfg.burst); spawnWave(cfg.burst, cap, cfg.hpBonus || 0); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }
+  if (kind === 'summon') { const n = Math.max(12, Math.round(waveSize() * 2)); const cap = Math.min(WAVE.maxAliveHardCap, guardCount() + n); spawnWave(n, cap, cfg.hpBonus || 0); fxQueue.push({ k: 'kingatk', kind: 'summon', x: king.x, z: king.z, r: 16 }); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }   // ULT: a big crowd-scaled horde (long cooldown)
   if (kind === 'laser') {
     // Delayed line beam: aim a ray from the King toward the click, telegraph it now, fire after cfg.delay.
     let dx = (+tx || king.x) - king.x, dz = (+tz || (king.z + 1)) - king.z; const dlen = Math.hypot(dx, dz) || 1; dx /= dlen; dz /= dlen;
@@ -448,16 +459,16 @@ function fireLaser(L) {
 // ---------- troops ----------
 function waveSize() { return clamp(Math.round((attackerCount() * WAVE.perPlayer + waveBonus + (round - 1)) * tune.waveSize), WAVE.minPerWave, WAVE.maxPerWave + 8); }
 function maxAlive() { return Math.min(WAVE.maxAliveHardCap, Math.round(WAVE.maxAliveBase + WAVE.maxAlivePerPlayer * attackerCount()) + waveBonus * 2); }
-function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { troops.set(troopId, { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
+function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const cap = capOverride == null ? maxAlive() : capOverride; const room = cap - guardCount(); n = Math.min(n, room); if (n <= 0) return; for (let i = 0; i < n; i++) { const tr = { id: troopId, x: (Math.random() - 0.5) * LANE.halfWidth * 1.8, z: LANE.troopSpawnZ + (Math.random() - 0.5) * 4, hp: TROOP.hp + (round - 1) * 12 + hpBonus, lastAtk: 0, kind: Math.random() < ARCHER.frac ? 'archer' : 'melee' }; if (Math.random() < 0.05) { tr.champion = true; tr.kind = 'melee'; tr.hp = (TROOP.hp + (round - 1) * 12) * 4; } troops.set(troopId, tr); troopId++; } fxQueue.push({ k: 'wave', x: 0, z: LANE.troopSpawnZ }); }
 
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
   general = null; ballot = []; votes.clear();
   gold = TEST_GOLD != null ? TEST_GOLD : GOLD.start;
   king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = [];
-  projectiles = []; troops.clear(); friendlies.clear(); initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
+  projectiles = []; troops.clear(); friendlies.clear(); powerups = []; initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
   if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
-  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; p.gen = (p.gen || 0) + 1; }
+  for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; p.gen = (p.gen || 0) + 1; p.buffUntil = 0; p.streak = 0; }
   recomputeDefenses(); broadcast({ t: 'ev', kind: 'reset' });
 }
 
@@ -482,6 +493,8 @@ setInterval(() => { try {
   for (const o of irons.values()) if (!o.alive && t >= o.regrowAt) { o.alive = true; o.hp = IRON.hp; }
   if (combat && gateUp() && king.alive && king.hp < king.maxHp) king.hp = Math.min(king.maxHp, king.hp + king.maxHp * KING.regenFrac * tune.kingRegen * dt);   // regen while shielded behind the closed gate
   if (combat && t - lastWaveAt > WAVE.intervalMs / tune.waveRate) { lastWaveAt = t; spawnWave(waveSize()); }
+  // Drop a power-up crate in the fighting lane every ~16s (max 2 out at once).
+  if (combat && t - lastPowerupAt > 16000 && powerups.length < 2) { lastPowerupAt = t; const pk = POWERUPS[Math.floor(Math.random() * POWERUPS.length)]; powerups.push({ id: powerupId++, x: (Math.random() - 0.5) * LANE.halfWidth * 1.4, z: 10 + Math.random() * 95, kind: pk.kind }); }
   // Fire any telegraphed Death Beams whose charge has elapsed (drop them all if combat ends or the King dies).
   if (pendingLasers.length) { if (!combat || !king.alive) pendingLasers = []; else { for (let i = pendingLasers.length - 1; i >= 0; i--) { if (t >= pendingLasers[i].fireAt) { fireLaser(pendingLasers[i]); pendingLasers.splice(i, 1); } } } }
 
@@ -490,6 +503,7 @@ setInterval(() => { try {
   // integrates mx/mz for players; it only handles respawn and re-clamps if the gate just dropped.
   for (const p of players.values()) {
     if (!p.alive) { if (t >= p.respawnAt) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; p.spawnGuard = t + 700; p.gen = (p.gen || 0) + 1; } continue; }   // spawnGuard: ignore the client's stale death position for a moment so respawn sticks at the back
+    for (let i = powerups.length - 1; i >= 0; i--) { const pu = powerups[i]; if (Math.hypot(p.x - pu.x, p.z - pu.z) <= 3.2) { const cfg = POWERUPS.find(x => x.kind === pu.kind); p.buffKind = pu.kind; p.buffUntil = t + cfg.dur; powerups.splice(i, 1); fxQueue.push({ k: 'pickup', x: pu.x, z: pu.z, c: cfg.color }); broadcast({ t: 'ev', kind: 'powerup', name: clients.get(p.id)?.name || 'A hero', label: cfg.label, color: '#' + cfg.color.toString(16).padStart(6, '0') }); break; } }
     if (up && p.z < LANE.wallZ + 3.5) p.z = LANE.wallZ + 3.5;   // keep attackers in FRONT of a standing gate
   }
 
@@ -519,7 +533,7 @@ setInterval(() => { try {
     const reach = ttype === 'build' ? (tgt.r + TROOP.attackRange) : TROOP.attackRange;
     if (d > reach) { tr.x += (dx / d) * TROOP.speed * dt; tr.z += (dz / d) * TROOP.speed * dt; const c = clampToLane(tr.x, tr.z); tr.x = c[0]; tr.z = c[1]; }
     else if (t - tr.lastAtk > TROOP.attackCd) { tr.lastAtk = t;
-      if (ttype === 'player') { damagePlayer(tgt, TROOP.dmg * tune.troopDmg, { x: tr.x, z: tr.z }); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
+      if (ttype === 'player') { damagePlayer(tgt, TROOP.dmg * tune.troopDmg * (tr.champion ? 2 : 1), { x: tr.x, z: tr.z }); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
       else if (ttype === 'friendly') { tgt.hp -= TROOP.dmg; if (tgt.hp <= 0) { fxQueue.push({ k: 'troopdie', x: tgt.x, z: tgt.z }); friendlies.delete(tgt.id); } }
       else if (ttype === 'build') { damageBuildStruct(tgt, TROOP.dmg); fxQueue.push({ k: 'troophit', x: tgt.x, z: tgt.z }); }
     }
@@ -604,7 +618,7 @@ setInterval(() => { try {
   // gen (respawn token) MUST ride with position so the server's pos-gating stays in lockstep — keep it in the broadcast. Only the heavy private data (gold/carry/rally) goes on the 'me' channel.
   const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.max(0, Math.min(100, Math.round(p.hp / effMaxHp(p) * 100))), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, p.general ? 1 : 0, p.gen]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
-  const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]);   // client only reads id,x,z — hp fraction was dead weight
+  const trp = []; for (const tr of troops.values()) { const row = [tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]; if (tr.champion) row.push(1); trp.push(row); }   // champions get a 4th flag; normal troops stay 3 (no extra bandwidth)
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
   const trees_ = sendWorld ? [...trees.values()].filter(tr => tr.alive).map(tr => [tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]) : null;
   const iron_  = sendWorld ? [...irons.values()].filter(o => o.alive).map(o => [o.id, +o.x.toFixed(1), +o.z.toFixed(1)]) : null;
@@ -625,12 +639,13 @@ setInterval(() => { try {
     friendlies: [...friendlies.values()].map(f => [f.id, +f.x.toFixed(1), +f.z.toFixed(1)]),
     cannon: { x: CANNON.x, z: CANNON.z, built: cannon.built ? 1 : 0, bi: cannon.bi, needI: cannon.needI, hp: Math.round(cannon.hp), maxHp: CANNON.hp, aim: +cannon.aim.toFixed(3), range: +cannon.range.toFixed(1) },
     towers: towers.map(tw => [tw.x, tw.z]),
+    powerups: powerups.map(pu => [pu.id, +pu.x.toFixed(1), +pu.z.toFixed(1), pu.kind]),
     fx: fxQueue.splice(0, fxQueue.length),
   });
   }
   // Private channel: send each player ONLY their own gold/carry/rally/respawn-token (49 other clients don't need it).
   if (t - lastMeAt >= ME_MS) { lastMeAt = t;
-    for (const [cid, c] of clients) { if (c.role !== 'player') continue; const p = players.get(cid); if (!p) continue; send(c.ws, { t: 'me', gold: p.gold, w: p.carry.w, i: p.carry.i, rally: t < (p.rallyUntil || 0) ? 1 : 0 }); }
+    for (const [cid, c] of clients) { if (c.role !== 'player') continue; const p = players.get(cid); if (!p) continue; const hasBuff = p.buffUntil > t; send(c.ws, { t: 'me', gold: p.gold, w: p.carry.w, i: p.carry.i, rally: t < (p.rallyUntil || 0) ? 1 : 0, buff: hasBuff ? p.buffKind : null, buffLeft: hasBuff ? Math.round((p.buffUntil - t) / 1000) : 0, haste: (p.buffKind === 'haste' && hasBuff) ? 1 : 0 }); }
   }
   const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
   if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }

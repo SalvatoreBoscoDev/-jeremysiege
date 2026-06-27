@@ -134,7 +134,7 @@ let lastTrees=[], lastIron=[];   // snapshots only carry trees/ore every 4th fra
 let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
 let cosmeticsCat=null, cosmeticSlots=[], myCos={hat:'none',cape:'none',helmet:'none'}, myCosOwned=[];
 let myPos=null, myWasDead=false, myGen=0;   // client-authoritative local position (+ respawn token)
-let myCarryW=0, myCarryI=0, myRally=0;       // private per-owner stats, delivered on the 'me' channel
+let myCarryW=0, myCarryI=0, myRally=0, myHaste=0, myBuff=null, myBuffLeft=0;   // private per-owner stats, delivered on the 'me' channel
 let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
 const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
 if (preName) $('#name').value = preName;
@@ -170,7 +170,7 @@ const net = connect({
   welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; cosmeticsCat=m.cosmetics; cosmeticSlots=m.cosmeticSlots||[]; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); buildCosmetics(); },
   roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); if(world.setGeneral) world.setGeneral(m.general); updateHud(m); },
-  me(m){ myGold=m.gold; myCarryW=m.w; myCarryI=m.i; myRally=m.rally; },   // private stats: not in the broadcast (gen rides in the snapshot)
+  me(m){ myGold=m.gold; myCarryW=m.w; myCarryI=m.i; myRally=m.rally; myHaste=m.haste; myBuff=m.buff; myBuffLeft=m.buffLeft; },   // private stats: not in the broadcast (gen rides in the snapshot)
 
   event(ev){
     if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
@@ -182,6 +182,9 @@ const net = connect({
     else if(ev.kind==='built'){ Sound.build(); }
     else if(ev.kind==='general'){ banner((ev.name||'A hero')+' is crowned GENERAL! 👑', '#ffd23f', 2600); Sound.round(); }
     else if(ev.kind==='rally'){ if(ev.name) banner(ev.name+' rallies the troops!', '#ffd23f', 1100); Sound.wave(); }
+    else if(ev.kind==='streak'){ banner(ev.name+' — '+ev.label+'! +'+ev.gold+'g', '#ff5a2a', 1700); Sound.streak(); }
+    else if(ev.kind==='champdown'){ banner(ev.name+' felled a CHAMPION!', '#ffcf3a', 1500); Sound.streak(); }
+    else if(ev.kind==='powerup'){ banner('⚡ '+(ev.name||'A hero')+' grabbed '+ev.label+'!', ev.color||'#8fe3ff', 1400); Sound.buy(); }
     else if(ev.kind==='gameover'){ showOver(ev.result, ev); Sound[ev.result==='attackers'?'win':'lose'](); }
     else if(ev.kind==='reset'){ myPerks={tough:0,dmg:0,respawn:0,swift:0}; myPos=null; myVote=null; cmdAt=0; refreshShop(); hideOver(); }
   },
@@ -244,7 +247,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       // CLIENT-AUTHORITATIVE: simulate my own movement locally so input feels instant.
       let ix=moveX, iy=moveY; if(keys['a'])ix=-1; if(keys['d'])ix=1; if(keys['w'])iy=-1; if(keys['s'])iy=1;
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
-      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1)*(myRally?1.25:1);
+      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1)*(myRally?1.25:1)*(myHaste?1.5:1);
       myPos.x+=ix*spd*dt; myPos.z+=iy*spd*dt;
       const gdown = !(lastSnap.gate && lastSnap.gate.hp>0 && !lastSnap.gate.open);   // gate smashed OR Jeremy sallied it open
       [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z, gdown ? LANE.duelZ : undefined);
@@ -314,7 +317,8 @@ function updateHud(m){
     if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
   }
   { const cw=myCarryW, ci=myCarryI;
-    $('#res').innerHTML = `<span class="pill">\u{1FAB5} ${cw}</span><span class="pill">\u26cf\ufe0f ${ci}</span><span class="pill gold">\u{1F4B0} ${myGold}</span>`; }
+    const buffPill = myBuff ? `<span class="pill" style="border-color:#fff;color:#fff;font-weight:900">\u26a1 ${myBuff.toUpperCase()} ${myBuffLeft}s</span>` : '';
+    $('#res').innerHTML = `<span class="pill">\u{1FAB5} ${cw}</span><span class="pill">\u26cf\ufe0f ${ci}</span><span class="pill gold">\u{1F4B0} ${myGold}</span>${buffPill}`; }
   const meP = m.players.find(p=>p[0]===myId);
   let atArmorer=false;
   if(campCfg && (m.phase==='combat'||m.phase==='intermission')){ const ax=myPos?myPos.x:(meP?meP[1]:999), az=myPos?myPos.z:(meP?meP[2]:999); const dx=ax-campCfg.armorer.x, dz=az-campCfg.armorer.z; atArmorer = dx*dx+dz*dz <= (campCfg.armorer.r+1.5)*(campCfg.armorer.r+1.5); }

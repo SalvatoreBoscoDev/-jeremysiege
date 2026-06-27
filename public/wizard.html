@@ -73,7 +73,7 @@
     <div class="blabel">MANA</div><div class="bar"><div id="manaFill" style="width:100%"></div></div>
   </div>
   <div id="status"></div>
-  <div class="hint">WASD walk the hilltop &nbsp;•&nbsp; pick a spell (1-4), then click the battlefield. Heal targets the King; Rally summons guards.</div>
+  <div class="hint">WASD walk the hilltop &nbsp;•&nbsp; aim with the cursor, press 1-4 to cast INSTANTLY. Heal targets the King; Rally summons guards.</div>
   <div id="spells"></div>
   <div id="ctrls"><button id="startBtn">START</button><button id="resetBtn" class="alt">Reset</button></div>
   <div id="shop"><h2>INTERMISSION - SHOP</h2><div id="shopItems"></div><button id="nextBtn">START NEXT ROUND</button></div>
@@ -137,12 +137,15 @@ function build(){ const wrap=$('#spells'); wrap.innerHTML='';
     el.onclick=()=>{ selSpell=key; refresh(); }; wrap.appendChild(el); }); }
 function refresh(){ document.querySelectorAll('.sp').forEach(e=>e.classList.toggle('sel', e.dataset.k===selSpell)); }
 function buildShop(){ const wrap=$('#shopItems'); wrap.innerHTML=''; if(!shopCfg) return; for(const key of Object.keys(shopCfg)){ const it=shopCfg[key]; const el=document.createElement('div'); el.className='item'; el.dataset.k=key; el.dataset.cost=it.cost; el.innerHTML=`<div class="nm">${key.toUpperCase()}</div><div class="ds">${it.desc}</div><div class="cost">${it.cost}g</div>`; el.onclick=()=>{ if((lastSnap?.gold||0)>=it.cost) net.send({t:'buy',item:key}); }; wrap.appendChild(el); } }
-addEventListener('keydown', e=>{ const n=parseInt(e.key); if(n>=1&&n<=4){ selSpell=order[n-1]; refresh(); } });
+addEventListener('keydown', e=>{ const n=parseInt(e.key); if(n>=1&&n<=4){ selSpell=order[n-1]; refresh(); cast(selSpell); } });   // press a number to cast instantly at the cursor (like the King)
 
 let mouse=new THREE.Vector2(), ray=new THREE.Raycaster(), ground=new THREE.Plane(new THREE.Vector3(0,1,0),0), aim=new THREE.Vector3();
 addEventListener('mousemove', e=>{ mouse.x=(e.clientX/innerWidth)*2-1; mouse.y=-(e.clientY/innerHeight)*2+1; ray.setFromCamera(mouse,camera); ray.ray.intersectPlane(ground,aim); if(aim) reticle.position.set(aim.x,0.4,aim.z); });
 addEventListener('mousedown', e=>{ if(e.button===0 && !e.target.closest('#shop,#ctrls,#spells')) cast(); });
-function cast(){ if(!spells||lastSnap?.phase!=='combat') return; const now=Date.now(); if(now-lastCast[selSpell]<spells[selSpell].cd) return; lastCast[selSpell]=now; net.send({t:'spell',kind:selSpell,x:aim.x,z:aim.z}); }
+function cast(kind){ kind=kind||selSpell; if(!spells||lastSnap?.phase!=='combat') return; const sp=spells[kind]; const now=Date.now();
+  if(now-lastCast[kind]<sp.cd) return;                                  // still on cooldown
+  if(lastSnap?.wizard && lastSnap.wizard.mana < sp.mana){ $('#status').textContent='Not enough mana!'; return; }   // NO cooldown on a failed (no-mana) cast
+  lastCast[kind]=now; net.send({t:'spell',kind,x:aim.x,z:aim.z}); }
 // --- WASD movement: the Wizard walks the hilltop ---
 const wkeys={};
 addEventListener('keydown', e=>{ const k=e.key.toLowerCase(); if('wasd'.includes(k)) wkeys[k]=true; });

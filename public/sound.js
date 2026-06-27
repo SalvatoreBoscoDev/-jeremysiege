@@ -78,6 +78,7 @@ export const Sound = {
   },
   laserCharge() { if (!ok(4, 200)) return; tone({ f: 90, f2: 540, dur: 1.0, type: 'sawtooth', vol: 0.26 }); },   // rising whine as the beam spools up
   laserFire() { if (!ok(4, 160)) return; tone({ f: 900, f2: 120, dur: 0.32, type: 'sawtooth', vol: 0.38 }); tone({ f: 1500, f2: 300, dur: 0.18, type: 'square', vol: 0.18 }); noise({ dur: 0.25, vol: 0.22, cut: 2200, type: 'bandpass' }); },
+  streak() { if (!ok(4, 200)) return; fanfare([[523, 0], [784, 0.08], [1047, 0.18]], 'square', 0.34, 0.3); },   // triumphant rising stinger for kill streaks / champion kills
   wave() { if (ok(3, 300)) { tone({ f: 165, f2: 120, dur: 0.5, type: 'sawtooth', vol: 0.22 }); tone({ f: 110, f2: 90, dur: 0.55, type: 'square', vol: 0.18 }); } },
 
   // ---- gathering / building ----

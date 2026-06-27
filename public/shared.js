@@ -44,7 +44,7 @@ export const KING = {
     slam:   { cd: 2500, dmg: 55,  radius: 14, desc: 'Ground Slam (around the King)' },
     cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Catapult shot (aimed)' },
     laser:  { cd: 4500, dmg: 95,  range: 78, width: 6, delay: 1050, desc: 'Death Beam (delayed line)' },
-    summon: { cd: 6000, dmg: 0,   radius: 0,  burst: 14, hpBonus: 25, desc: 'Summon a Wave of guards' },
+    summon: { cd: 30000, dmg: 0,  radius: 0,  hpBonus: 40, desc: 'ULT: Summon the Horde (scales with crowd)' },
   },
 };
 
@@ -154,7 +154,7 @@ export const PLAYER_COLORS = [
 
 // ---- Defend-Your-Castle: gate, rounds, economy, shop, towers ----
 export const GATE = { baseHp: 3500, hpPerPlayer: 500 };   // attackers smash this BEFORE they can hurt Jeremy
-export const ROUNDS = { count: 5, combatMs: 240000, intermissionMs: 60000 };
+export const ROUNDS = { count: 5, combatMs: 180000, intermissionMs: 60000 };
 export const GOLD = { start: 150, perKill: 10, perRoundBase: 120, perRoundPerPlayer: 6, perTroopKill: 6 };
 // Attackers buy ONE weapon (permanent) with personal gold earned from kills:
 export const WEAPON_BUY = { shotgun: 120, cannon: 150, grenade: 180, rocket: 300 };

@@ -337,7 +337,7 @@ export function createWorld(canvas, opts = {}) {
   }
 
   // ---- dynamic pools ----
-  const playerMeshes = new Map(); const projMeshes = new Map(); const fxList = [];
+  const playerMeshes = new Map(); const projMeshes = new Map(); const fxList = []; const powerupMeshes = new Map();
   let roster = new Map();
   let localId = null;   // the local player's id; its mesh is driven by client prediction, not server snapshots
   let localKing = false, localWizard = false;   // when this client controls the King/Wizard, drive it from prediction
@@ -451,8 +451,8 @@ export function createWorld(canvas, opts = {}) {
     }
     for (const [id, rec] of playerMeshes) if (!seen.has(id)) { scene.remove(rec.g); playerMeshes.delete(id); }
     const seenT = new Set();
-    for (const tt of s.troops || []) { const [id, x, z] = tt; seenT.add(id);
-      let st = troopState.get(id); if (!st) { st = { x, z, tx: x, tz: z, c: 0.85 + Math.random() * 0.3, sc: 0.9 + Math.random() * 0.35 }; troopState.set(id, st); } st.tx = x; st.tz = z; }
+    for (const tt of s.troops || []) { const [id, x, z, champ] = tt; seenT.add(id);
+      let st = troopState.get(id); if (!st) { st = { x, z, tx: x, tz: z, c: 0.85 + Math.random() * 0.3, sc: 0.9 + Math.random() * 0.35 }; troopState.set(id, st); } st.tx = x; st.tz = z; if (champ) { st.champ = 1; st.sc = 2.0; } }
     for (const id of troopState.keys()) if (!seenT.has(id)) troopState.delete(id);
     const seenP = new Set();
     for (const pr of s.proj) { const [id, x, y, z, wep] = pr; seenP.add(id);
@@ -469,6 +469,18 @@ export function createWorld(canvas, opts = {}) {
     const seenF = new Set();
     for (const ff of s.friendlies || []) { const [id, x, z] = ff; seenF.add(id); const g = ensureFriendly(id); if (g.position.lengthSq() === 0) g.position.set(x, 0, z); g.userData.tx = x; g.userData.tz = z; }
     for (const [id, g] of friendlyMeshes) if (!seenF.has(id)) { scene.remove(g); friendlyMeshes.delete(id); }
+    // power-up crates: glowing spinning cubes, color by kind
+    const PU_COL = { rage: 0xff3322, shield: 0x33ccff, haste: 0xffe23a };
+    const seenPU = new Set();
+    for (const pu of s.powerups || []) { const [id, x, z, kind] = pu; seenPU.add(id);
+      let m = powerupMeshes.get(id);
+      if (!m) { const col = PU_COL[kind] || 0xffffff; m = new THREE.Group();
+        const box = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 2.2), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.85, metalness: 0.3, roughness: 0.35 }));
+        box.position.y = 2.3; m.add(box); m.userData.box = box;
+        const g = new THREE.Sprite(glowMaterial(col)); g.scale.set(8, 8, 1); g.position.y = 2.3; m.add(g);
+        scene.add(m); powerupMeshes.set(id, m); }
+      m.position.x = x; m.position.z = z; }
+    for (const [id, m] of powerupMeshes) if (!seenPU.has(id)) { scene.remove(m); powerupMeshes.delete(id); }
     gateFrac = (s.gate && s.gate.maxHp) ? s.gate.hp / s.gate.maxHp : 0; gateOpenVis = !!(s.gate && s.gate.open);
     syncTowers(s.towers || []);
     if (s.ramSite) { if (ramT === null) ram.position.set(s.ramSite.x, 0, s.ramSite.z); ramT = s.ramSite; ram.visible = true; } else { ram.visible = false; ramT = null; }
@@ -527,10 +539,13 @@ export function createWorld(canvas, opts = {}) {
       rec.g.position.y = Math.max(rec.liftY || 0, terrainY(rec.g.position.x, rec.g.position.z)) - rec.tilt * 0.35;   // cannon platform OR the hill ramp, else ground (sink when dead)
       if (rec.isGeneral && !rec.crown) { rec.crown = makeCrown(); rec.g.add(rec.crown); }
       if (rec.crown) rec.crown.visible = !!rec.isGeneral && !rec.dead;
+      rec.g.scale.setScalar(rec.isGeneral ? 1.5 : 1);   // the elected General towers over the crowd
+
       if (!rec.dead) rec.flung = false;
       if (rec.vis) rec.vis.visible = !(rec.dead && rec.flung);
     }
     for (const g of friendlyMeshes.values()) { g.position.x += (g.userData.tx - g.position.x) * k; g.position.z += (g.userData.tz - g.position.z) * k; }
+    for (const m of powerupMeshes.values()) { if (m.userData.box) m.userData.box.rotation.y += dt * 2.2; m.position.y = 0.4 + Math.sin(performance.now() / 380) * 0.35; }   // crates spin + bob
     let i = 0;
     for (const st of troopState.values()) {
       if (i >= MAX_TROOPS) break;
@@ -540,7 +555,7 @@ export function createWorld(canvas, opts = {}) {
       _p.set(st.x, (1.25 + wob) * sc, st.z); _m.compose(_p, _q, _s); troopBody.setMatrixAt(i, _m);
       _p.set(st.x, (2.35 + wob) * sc, st.z); _m.compose(_p, _q, _s); troopHead.setMatrixAt(i, _m);
       _p.set(st.x, (3.0 + wob) * sc, st.z); _m.compose(_p, _q, _s); troopHelm.setMatrixAt(i, _m);
-      _col.setRGB(st.c, st.c * 0.28, st.c * 0.22); troopBody.setColorAt(i, _col);
+      if (st.champ) _col.setRGB(0.66, 0.18, 0.95); else _col.setRGB(st.c, st.c * 0.28, st.c * 0.22); troopBody.setColorAt(i, _col);   // champions glow menacing purple
       if (troopShadow) { _p.set(st.x, 0.04, st.z); _m.compose(_p, _shadowQuat, _s); troopShadow.setMatrixAt(i, _m); }
       i++;
     }
@@ -576,6 +591,7 @@ export function createWorld(canvas, opts = {}) {
       case 'boom': Sound.explosion(false); break;
       case 'death': Sound.death(); break;
       case 'troopdie': case 'troophit': case 'ramhitback': Sound.hit(); break;
+      case 'champdie': Sound.explosion(true); break;
       case 'kingatk': Sound.kingAttack(f.kind); break;
       case 'laseraim': Sound.laserCharge(); break;
       case 'laserbeam': Sound.laserFire(); break;
@@ -621,6 +637,7 @@ export function createWorld(canvas, opts = {}) {
       scar.position.set(cx, 0.32, cz); scar.rotation.y = rotY; scene.add(scar); fxList.push({ m: scar, life: 0, max: 0.9, kind: 'glow' });
       for (let i = 0; i < 18; i++) { const u = Math.random(); const bx = f.x + f.dx * f.len * u + (Math.random() - 0.5) * f.w, bz = f.z + f.dz * f.len * u + (Math.random() - 0.5) * f.w; const m = new THREE.Mesh(fragGeo, new THREE.MeshBasicMaterial({ color: 0xff6688, transparent: true, opacity: 1 })); m.position.set(bx, 1.4, bz); const ang = Math.random() * Math.PI * 2, sp = 8 + Math.random() * 18; scene.add(m); fxList.push({ m, life: 0, max: 0.7 + Math.random() * 0.3, kind: 'frag', vel: new THREE.Vector3(Math.cos(ang) * sp, 10 + Math.random() * 16, Math.sin(ang) * sp), spin: (Math.random() - 0.5) * 20 }); }
     } else if (f.k === 'death') { explode(f.x, f.z, true); if (f.fling) { const col = (roster.get(f.id) || {}).color || 0x3a6ea0; spawnRagdoll(f.x, f.z, f.vx || 0, f.vy || 20, f.vz || 0, col); const rec = playerMeshes.get(f.id); if (rec) rec.flung = true; }
+    } else if (f.k === 'champdie') { explode(f.x, f.z, true); const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 9, 28), new THREE.MeshBasicMaterial({ color: 0xaa44ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide })); m.rotation.x = -Math.PI / 2; m.position.set(f.x, 0.3, f.z); scene.add(m); fxList.push({ m, life: 0, max: 0.7, kind: 'ring' }); const g = new THREE.Sprite(glowMaterial(0xaa44ff)); g.scale.set(11, 11, 1); g.position.set(f.x, 2, f.z); scene.add(g); fxList.push({ m: g, life: 0, max: 0.5, kind: 'glow' });
     } else if (f.k === 'troopdie') { explode(f.x, f.z, false);
     } else if (f.k === 'pickup') {
       const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 3, 20), new THREE.MeshBasicMaterial({ color: f.c || 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
