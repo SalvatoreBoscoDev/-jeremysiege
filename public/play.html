@@ -134,6 +134,7 @@ let lastTrees=[], lastIron=[];   // snapshots only carry trees/ore every 4th fra
 let perksCat=null, perkOrder=[], perkBuyCat=null, perkMax=5, wbuy=null, wbuyOrder=[], myPerkRound=-2, myGold=0, campCfg=null;
 let cosmeticsCat=null, cosmeticSlots=[], myCos={hat:'none',cape:'none',helmet:'none'}, myCosOwned=[];
 let myPos=null, myWasDead=false, myGen=0;   // client-authoritative local position (+ respawn token)
+let myCarryW=0, myCarryI=0, myRally=0;       // private per-owner stats, delivered on the 'me' channel
 let myPerks={tough:0,dmg:0,respawn:0,swift:0};   // owned upgrade stacks (for local speed + shop cost display)
 const params = new URLSearchParams(location.search); const preName = params.get('name'); const preClass = params.get('class');
 if (preName) $('#name').value = preName;
@@ -169,6 +170,8 @@ const net = connect({
   welcome(m){ myId=m.id; weapons=m.weapons; perksCat=m.perks; perkOrder=m.perkOrder; perkBuyCat=m.perkBuy; perkMax=m.perkMax||5; wbuy=m.weaponBuy; wbuyOrder=m.weaponBuyOrder; campCfg=m.camp; cosmeticsCat=m.cosmetics; cosmeticSlots=m.cosmeticSlots||[]; world.setLocalId(myId); renderWep(preClass||'blaster'); buildShop(); buildArmory(); buildCosmetics(); },
   roster(m){ world.setRoster(m.players); const mine=m.players.find(p=>p[0]===myId); if(mine&&mine[3]){ myCos=mine[3]; refreshCosmetics(); } },
   snapshot(m){ lastSnap=m; world.applySnapshot(m); if(world.setGeneral) world.setGeneral(m.general); updateHud(m); },
+  me(m){ myGold=m.gold; myCarryW=m.w; myCarryI=m.i; myRally=m.rally; myGen=m.gen; },   // private stats: not in the broadcast
+
   event(ev){
     if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
     else if(ev.kind==='intermission'){ banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600); Sound.intermission(); }
@@ -233,7 +236,6 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
   const me=lastSnap?lastSnap.players.find(p=>p[0]===myId):null;
   if(me){
     const sx=me[1], sz=me[2], alive=me[6], slowed=me[7];
-    if(me[14]!=null) myGen=me[14];                              // latest respawn token from the server
     if(!myPos) myPos={x:sx,z:sz};
     if(!alive){ myPos.x=sx; myPos.z=sz; myWasDead=true; }       // dead: follow the server
     else {
@@ -241,7 +243,7 @@ function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.u
       // CLIENT-AUTHORITATIVE: simulate my own movement locally so input feels instant.
       let ix=moveX, iy=moveY; if(keys['a'])ix=-1; if(keys['d'])ix=1; if(keys['w'])iy=-1; if(keys['s'])iy=1;
       const len=Math.hypot(ix,iy); if(len>1){ ix/=len; iy/=len; }
-      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1)*(me[13]?1.25:1);
+      const spd=PLAYER.speed*(1+(myPerks.swift||0)*PERK_FX.speed)*(slowed?0.4:1)*(Date.now()<dashUntil?myAbility.speedMult:1)*(myRally?1.25:1);
       myPos.x+=ix*spd*dt; myPos.z+=iy*spd*dt;
       const gdown = !(lastSnap.gate && lastSnap.gate.hp>0 && !lastSnap.gate.open);   // gate smashed OR Jeremy sallied it open
       [myPos.x,myPos.z]=clampToLane(myPos.x,myPos.z, gdown ? LANE.duelZ : undefined);
@@ -275,13 +277,12 @@ function updateHud(m){
   if(m.phase==='intermission'){ obj='Visit the camp stalls to upgrade'; objCol='#8fe3ff'; }
   else if(m.phase==='combat'){ if(gateUp){ obj = m.ram ? 'PUSH THE RAM into the gate!' : 'Build the RAM: gather WOOD + IRON'; objCol = m.ram ? '#9be36a' : '#dfe6ff'; } else { obj='GATE DOWN — KILL JEREMY!'; objCol='#ff7adf'; } }
   const me=m.players.find(p=>p[0]===myId);
-  if(me){ const [,sxp,szp,,hp,wep,alive,,maxHp,gold,cw,ci]=me;
+  if(me){ const [,sxp,szp,,hpFrac,wep,alive]=me;
     // Use the smooth PREDICTED position (not the laggy server one) for proximity prompts, so the chop/mine
     // chip doesn't flicker/spam on phones where the server position jitters behind your avatar.
     const mxp = myPos?myPos.x:sxp, mzp = myPos?myPos.z:szp;
-    $('#hpFill').style.width=Math.max(0, maxHp? hp/maxHp*100 : hp)+'%';
+    $('#hpFill').style.width=Math.max(0, hpFrac||0)+'%';
     if(wep&&wep!==myWep){ myWep=wep; renderWep(wep); }
-    myGold = gold||0;
     $('#respawn').style.display = alive?'none':'flex';
     renderVote(m);
     const rs=m.ramSite;
@@ -311,7 +312,7 @@ function updateHud(m){
     const ar=$('#armory'); ar.style.display = inArmory?'flex':'none';
     if(inArmory){ ar.querySelectorAll('.wb').forEach(c=>{ const owned=myWep===c.dataset.k; c.classList.toggle('owned',owned); c.classList.toggle('poor', !owned && myGold<+c.dataset.cost); }); }
   }
-  { const cw=me?(me[10]||0):0, ci=me?(me[11]||0):0;
+  { const cw=myCarryW, ci=myCarryI;
     $('#res').innerHTML = `<span class="pill">\u{1FAB5} ${cw}</span><span class="pill">\u26cf\ufe0f ${ci}</span><span class="pill gold">\u{1F4B0} ${myGold}</span>`; }
   const meP = m.players.find(p=>p[0]===myId);
   let atArmorer=false;

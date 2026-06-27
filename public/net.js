@@ -25,6 +25,7 @@ export function connect(handlers = {}) {
     ws.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 's') handlers.snapshot && handlers.snapshot(m);
+      else if (m.t === 'me') handlers.me && handlers.me(m);
       else if (m.t === 'welcome') handlers.welcome && handlers.welcome(m);
       else if (m.t === 'roster') handlers.roster && handlers.roster(m);
       else if (m.t === 'ev') handlers.event && handlers.event(m);

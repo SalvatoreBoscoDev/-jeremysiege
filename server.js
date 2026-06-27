@@ -464,6 +464,7 @@ function resetGame() {
 // ---------- tick ----------
 let last = Date.now();
 let lastSnapAt = 0; const SNAP_MS = 66;   // broadcast snapshots ~15Hz; the sim still runs every tick and clients interpolate, so it stays smooth at ~30% less bandwidth
+let lastMeAt = 0; const ME_MS = 150;      // each player's PRIVATE stats (gold/carry/rally/respawn-token) go only to that player, ~7Hz — keeps them out of the 50x50 broadcast
 let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now(), snapN = 0;
 setInterval(() => { try {
   const _hStart = performance.now();
@@ -590,7 +591,8 @@ setInterval(() => { try {
   projectiles = keep;
 
   if (t - lastSnapAt >= SNAP_MS) { lastSnapAt = t;
-  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.round(p.hp), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, effMaxHp(p), p.gold, p.carry.w, p.carry.i, p.general ? 1 : 0, t < (p.rallyUntil || 0) ? 1 : 0, p.gen]);
+  // Broadcast row = only what's needed to RENDER a player to everyone. Private per-owner data (gold/carry/rally/respawn-token) goes out on the 'me' channel below.
+  const ps = []; for (const p of players.values()) ps.push([p.id, +p.x.toFixed(1), +p.z.toFixed(1), +p.a.toFixed(2), Math.max(0, Math.min(100, Math.round(p.hp / effMaxHp(p) * 100))), p.wep, p.alive ? 1 : 0, t < p.slowUntil ? 1 : 0, p.general ? 1 : 0]);
   const prj = projectiles.map(pr => [pr.id, +pr.x.toFixed(1), +pr.y.toFixed(1), +pr.z.toFixed(1), pr.wep]);
   const trp = []; for (const tr of troops.values()) trp.push([tr.id, +tr.x.toFixed(1), +tr.z.toFixed(1)]);   // client only reads id,x,z — hp fraction was dead weight
   const sendWorld = (++snapN % 4 === 0);   // trees + ore are static -> only re-send every 4th frame (client keeps the last set)
@@ -615,6 +617,10 @@ setInterval(() => { try {
     towers: towers.map(tw => [tw.x, tw.z]),
     fx: fxQueue.splice(0, fxQueue.length),
   });
+  }
+  // Private channel: send each player ONLY their own gold/carry/rally/respawn-token (49 other clients don't need it).
+  if (t - lastMeAt >= ME_MS) { lastMeAt = t;
+    for (const [cid, c] of clients) { if (c.role !== 'player') continue; const p = players.get(cid); if (!p) continue; send(c.ws, { t: 'me', gold: p.gold, w: p.carry.w, i: p.carry.i, rally: t < (p.rallyUntil || 0) ? 1 : 0, gen: p.gen }); }
   }
   const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
   if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }

@@ -438,8 +438,8 @@ export function createWorld(canvas, opts = {}) {
     if (s.wizard && typeof s.wizard.x === 'number') { if (!localWizard) { wizT.x = s.wizard.x; wizT.z = s.wizard.z; wizT.a = s.wizard.a; } wizT.has = 1; }
     const seen = new Set();
     for (const pp of s.players) {
-      const [id, x, z, a, hp, wep, alive, slowed, maxHp] = pp; seen.add(id);
-      const rec = ensurePlayer(id); rec.isGeneral = !!pp[12];
+      const [id, x, z, a, hpFrac, wep, alive, slowed, general] = pp; seen.add(id);
+      const rec = ensurePlayer(id); rec.isGeneral = !!general;
       if (rec.g.position.lengthSq() === 0) rec.g.position.set(x, 0, z);
       // Local player is positioned by client prediction (setLocalPos); don't let server snapshots yank it.
       if (id !== localId) { rec.tx = x; rec.tz = z; rec.ta = a; }
@@ -447,7 +447,7 @@ export function createWorld(canvas, opts = {}) {
       rec.body.material.emissive.setHex(slowed ? 0x2244ff : 0x000000); rec.body.material.emissiveIntensity = slowed ? 0.7 : 0;
       const isLocal = (id === localId);   // don't float your own name/HP in your face
       if (rec.label) rec.label.visible = !isLocal && !!alive;
-      if (rec.hpbar) { const frac = maxHp ? Math.max(0, Math.min(1, hp / maxHp)) : 1; if (Math.abs(frac - rec.hpFrac) > 0.01) { rec.hpFrac = frac; rec.hpbar.set(frac); } rec.hpbar.spr.visible = !isLocal && !!alive; }
+      if (rec.hpbar) { const frac = Math.max(0, Math.min(1, (hpFrac || 0) / 100)); if (Math.abs(frac - rec.hpFrac) > 0.01) { rec.hpFrac = frac; rec.hpbar.set(frac); } rec.hpbar.spr.visible = !isLocal && !!alive; }
     }
     for (const [id, rec] of playerMeshes) if (!seen.has(id)) { scene.remove(rec.g); playerMeshes.delete(id); }
     const seenT = new Set();
