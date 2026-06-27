@@ -128,6 +128,7 @@ const interMs = TEST_INT_MS != null ? TEST_INT_MS : ROUNDS.intermissionMs;
 const gate = { hp: 0, maxHp: 0 };
 const king = { x: 0, z: LANE.kingZ, a: 0, mx: 0, mz: 0, hp: 0, maxHp: 0, alive: true, cd: { slam: 0, cannon: 0, laser: 0, summon: 0 }, gateOpen: false, up: { might: 0, swift: 0, reach: 0 } };
 let pendingLasers = [];   // delayed Death Beams: telegraphed now, fire after a short charge
+let kingBarrage = null;   // grenade-barrage ULT: rains explosions around the King over a few seconds
 let wizard = null;
 // ---- General (elected commander) + lobby vote ----
 const GEN = { hpMult: 1.8, weapon: 'shotgun', cmdCd: 22000, radius: 34, rallyDur: 6000, rallyHeal: 45, rallyDmg: 1.3, rallySpeed: 1.25 };
@@ -393,8 +394,8 @@ function damagePlayer(p, amount, src) {
 function kingAttack(id, kind, tx, tz) {
   if (clients.get(id)?.role !== 'king' || phase !== 'combat' || !king.alive) return;
   const cfg = KING.attacks[kind]; if (!cfg) return; const t = now(); const cdMult = Math.max(0.5, 1 - 0.12 * king.up.swift); if (t - king.cd[kind] < cfg.cd * cdMult) return; king.cd[kind] = t;
-  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Summon Wave' }[kind] || kind), color: 0xffd23f });
-  if (kind === 'summon') { const n = Math.max(12, Math.round(waveSize() * 2)); const cap = Math.min(WAVE.maxAliveHardCap, guardCount() + n); spawnWave(n, cap, cfg.hpBonus || 0); fxQueue.push({ k: 'kingatk', kind: 'summon', x: king.x, z: king.z, r: 16 }); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }   // ULT: a big crowd-scaled horde (long cooldown)
+  fxQueue.push({ k: 'castlabel', x: king.x, z: king.z, y: 32, text: (clients.get(id)?.name || 'The King') + ': ' + ({ cannon: 'Catapult', slam: 'Ground Slam', laser: 'Death Beam', summon: 'Grenade Barrage' }[kind] || kind), color: 0xffd23f });
+  if (kind === 'summon') { kingBarrage = { left: cfg.count || 20, nextAt: t, dmg: cfg.dmg, radius: cfg.radius, step: 1000 / (cfg.perSec || 5) }; fxQueue.push({ k: 'kingatk', kind: 'summon', x: king.x, z: king.z, r: 16 }); broadcast({ t: 'ev', kind: 'kingatk', atk: 'summon' }); return; }   // ULT: grenade barrage rains around the King over a few seconds
   if (kind === 'laser') {
     // Delayed line beam: aim a ray from the King toward the click, telegraph it now, fire after cfg.delay.
     let dx = (+tx || king.x) - king.x, dz = (+tz || (king.z + 1)) - king.z; const dlen = Math.hypot(dx, dz) || 1; dx /= dlen; dz /= dlen;
@@ -449,7 +450,7 @@ function spawnWave(n, capOverride, hpBonus = 0) { if (NO_TROOPS) return; const c
 function resetGame() {
   phase = 'lobby'; round = 0; result = null; waveBonus = 0; towers.length = 0;
   gold = TEST_GOLD != null ? TEST_GOLD : GOLD.start;
-  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = [];
+  king.alive = true; king.x = 0; king.z = LANE.kingZ; king.mx = 0; king.mz = 0; king.cd = { slam: 0, cannon: 0, laser: 0, summon: 0 }; king.gateOpen = false; king.up = { might: 0, swift: 0, reach: 0 }; pendingLasers = []; kingBarrage = null;
   projectiles = []; troops.clear(); friendlies.clear(); powerups = []; initForest(); initIron(); initBuilds(); initCannon(); ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };
   if (wizard) { wizard.mana = WIZARD.maxMana; wizard.cd = { heal: 0, meteor: 0, freeze: 0, rally: 0 }; }
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = PLAYER.maxHp; p.alive = true; p.wep = p.cls || 'blaster'; p.carry = { w: 0, i: 0 }; p.kills = 0; p.deaths = 0; p.dmgDealt = 0; p.gold = TEST_PGOLD != null ? TEST_PGOLD : 0; p.perks = { tough: 0, dmg: 0, respawn: 0, swift: 0 }; p.perkRound = -1; p.general = false; p.rallyUntil = 0; p.gen = (p.gen || 0) + 1; p.buffUntil = 0; }
@@ -480,6 +481,8 @@ setInterval(() => { try {
   if (combat && t - lastPowerupAt > 16000 && powerups.length < 2) { lastPowerupAt = t; const pk = POWERUPS[Math.floor(Math.random() * POWERUPS.length)]; powerups.push({ id: powerupId++, x: (Math.random() - 0.5) * LANE.halfWidth * 1.4, z: 10 + Math.random() * 95, kind: pk.kind }); }
   // Fire any telegraphed Death Beams whose charge has elapsed (drop them all if combat ends or the King dies).
   if (pendingLasers.length) { if (!combat || !king.alive) pendingLasers = []; else { for (let i = pendingLasers.length - 1; i >= 0; i--) { if (t >= pendingLasers[i].fireAt) { fireLaser(pendingLasers[i]); pendingLasers.splice(i, 1); } } } }
+  // Grenade-barrage ULT: drop one explosion at a random spot around the King every `step` ms until spent.
+  if (kingBarrage) { if (!combat || !king.alive || kingBarrage.left <= 0) kingBarrage = null; else if (t >= kingBarrage.nextAt) { kingBarrage.nextAt = t + kingBarrage.step; kingBarrage.left--; const ang = Math.random() * Math.PI * 2, dist = 3 + Math.random() * 12; const gx = clamp(king.x + Math.sin(ang) * dist, -LANE.halfWidth, LANE.halfWidth), gz = clamp(king.z + Math.cos(ang) * dist, LANE.duelZ, KING.area.maxZ); aoePlayers(gx, gz, kingBarrage.radius, kingBarrage.dmg); aoeBuildsFriendlies(gx, gz, kingBarrage.radius, kingBarrage.dmg); fxQueue.push({ k: 'boom', x: gx, z: gz, r: kingBarrage.radius, c: 0xff5522 }); } }
 
   const up = gateUp();
   // Player movement is now CLIENT-AUTHORITATIVE (see the 'pos' handler). The server no longer

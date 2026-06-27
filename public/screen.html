@@ -100,7 +100,8 @@ let lastT=performance.now(), slowmoUntil=0;
 const flashEl=$('#flash');
 function flash(txt,color){ flashEl.textContent=txt; flashEl.style.color=color||'#ffd23f'; flashEl.classList.remove('show'); void flashEl.offsetWidth; flashEl.classList.add('show'); }
 function loop(now){ const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; world.update(dt * (now < slowmoUntil ? 0.25 : 1));
-  const a=now/16000; camera.position.set(Math.sin(a)*40, 60, 76); camera.lookAt(Math.sin(a)*10, 6, -30);
+  // Side view: camera off the LEFT flank, perpendicular to the lane, so the WHOLE fight (palace -> camp) is visible at once. Gentle sway for life.
+  const sway=Math.sin(now/11000)*8; camera.position.set(-124, 66, 8 + sway); camera.lookAt(0, 5, 8 + sway*0.5);
   world.render(camera); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

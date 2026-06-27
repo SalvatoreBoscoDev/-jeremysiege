@@ -44,7 +44,7 @@ export const KING = {
     slam:   { cd: 2500, dmg: 55,  radius: 14, desc: 'Ground Slam (around the King)' },
     cannon: { cd: 1700, dmg: 45,  radius: 8,  desc: 'Catapult shot (aimed)' },
     laser:  { cd: 4500, dmg: 95,  range: 78, width: 6, delay: 1050, desc: 'Death Beam (delayed line)' },
-    summon: { cd: 30000, dmg: 0,  radius: 0,  hpBonus: 40, desc: 'ULT: Summon the Horde (scales with crowd)' },
+    summon: { cd: 120000, dmg: 35, radius: 6, count: 20, perSec: 5, desc: 'ULT: Grenade Barrage' },
   },
 };
 
