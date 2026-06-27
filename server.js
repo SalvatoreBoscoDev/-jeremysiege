@@ -126,12 +126,13 @@ let general = null;          // elected General's player id (lasts the whole gam
 let ballot = [];             // up to 3 candidate ids for the lobby vote
 const votes = new Map();     // voterId -> candidateId
 let cmdCd = 0;               // General's Rally command cooldown stamp
+let emptyCombatSince = 0;    // when combat went empty (no players) -> auto-return to lobby
 
 const attackerCount = () => players.size;
 const gateUp = () => gate.hp > 0 && !king.gateOpen;   // King vulnerable when the gate is smashed OR he has it open to sally
 
 // ---- live balance knobs (host dashboard sets these via the 'tune' message) ----
-const tune = { kingHp: 1, gateHp: 1, waveSize: 1, troopDmg: 1, playerDmg: 1, waveRate: 1 };
+const tune = { kingHp: 1, gateHp: 1, waveSize: 1, troopDmg: 1, playerDmg: 1, waveRate: 1, general: 1, kingRegen: 1 };
 function kingBaseHp() { return TEST_HP != null ? TEST_HP : (KING.baseHp + KING.hpPerPlayer * Math.max(1, attackerCount())); }
 function gateBaseHp() { return TEST_GATE != null ? TEST_GATE : (GATE.baseHp + GATE.hpPerPlayer * Math.max(1, attackerCount())); }
 function recomputeDefenses() {
@@ -146,7 +147,7 @@ function applyTune(k) {   // live-apply HP changes mid-match, preserving the cur
 function guardCount() { let n = 0; for (const t of troops.values()) if (t.hp > 0) n++; return n; }
 function woodNeeded() { return TEST_WOOD != null ? TEST_WOOD : clamp(Math.round(RAM.woodNeededBase + RAM.woodNeededPerPlayer * attackerCount()), RAM.woodNeededBase, RAM.woodNeededMax); }
 function ironNeeded() { return TEST_IRON != null ? TEST_IRON : clamp(Math.round(RAM.ironNeededBase + RAM.ironNeededPerPlayer * attackerCount()), RAM.ironNeededBase, RAM.ironNeededMax); }
-function effMaxHp(p) { return (PLAYER.maxHp + p.perks.tough * PERK_FX.hp) * (p.general ? GEN.hpMult : 1); }
+function effMaxHp(p) { return (PLAYER.maxHp + p.perks.tough * PERK_FX.hp) * (p.general ? GEN.hpMult * tune.general : 1); }
 function dmgMult(p) { return (1 + p.perks.dmg * PERK_FX.dmg) * (now() < (p.rallyUntil || 0) ? GEN.rallyDmg : 1); }
 function speedMult(p) { return 1 + p.perks.swift * PERK_FX.speed; }
 function respawnDelay(p) { return Math.max(1200, PLAYER.respawnMs - p.perks.respawn * PERK_FX.respawnMs); }
@@ -161,7 +162,12 @@ function addPlayer(id, cls) { const [x, z] = playerSpawn(); const wep = WEAPON_O
 
 // ---------- networking ----------
 const wss = new WebSocketServer({ server });
-wss.on('connection', (ws) => { const id = nextId++; try { ws._socket.setNoDelay(true); } catch {}   /* disable Nagle so 22Hz snapshots flush immediately, not in bursts */ ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } handleMessage(id, ws, m); }); ws.on('close', () => removeClient(id)); });
+wss.on('connection', (ws) => { const id = nextId++; ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; }); try { ws._socket.setNoDelay(true); } catch {}   /* disable Nagle so 22Hz snapshots flush immediately, not in bursts */ ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } try { handleMessage(id, ws, m); } catch (e) { console.error('[msg error]', e && e.stack || e); } }); ws.on('close', () => removeClient(id)); ws.on('error', () => { try { ws.terminate(); } catch {} }); });
+// Heartbeat: phones that sleep/lose signal never send a clean close. Ping every 30s and reclaim sockets that miss a pong.
+setInterval(() => { for (const c of clients.values()) { const ws = c.ws; if (ws.isAlive === false) { try { ws.terminate(); } catch {} continue; } ws.isAlive = false; try { ws.ping(); } catch {} } }, 30000);
+// Never let one stray error take the whole party down — log and keep running (systemd is the last resort, not the first).
+process.on('uncaughtException', (e) => console.error('[uncaught]', e && e.stack || e));
+process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e && e.stack || e));
 function removeClient(id) { const c = clients.get(id); clients.delete(id); players.delete(id); if (c && c.role === 'wizard') wizard = null; if (id === general) general = null; recomputeDefenses(); broadcastRoster(); }
 const send = (ws, o) => { if (ws.readyState === 1) ws.send(JSON.stringify(o)); };
 function broadcast(o) { const s = JSON.stringify(o); for (const c of clients.values()) if (c.ws.readyState === 1) c.ws.send(s); }
@@ -197,8 +203,8 @@ function handleMessage(id, ws, m) {
     case 'katk': kingAttack(id, m.kind, +m.x, +m.z); break;
     case 'spell': wizardSpell(id, m.kind, +m.x, +m.z); break;
     // Buy an Armor/upgrade at the camp's left stall with personal gold. Walk-up, combat OR intermission, stacks to PERK_MAX.
-    case 'buyperk': { const p = players.get(id); if (!p || !PERK_BUY[m.perk]) break; if (phase !== 'combat' && phase !== 'intermission') break; const near = Math.hypot(p.x - CAMP.armorer.x, p.z - CAMP.armorer.z) <= CAMP.armorer.r + 1.5; if (!near) break; const owned = p.perks[m.perk] || 0; if (owned >= PERK_MAX) break; const cost = PERK_BUY[m.perk] * (owned + 1); if (p.gold < cost) break; p.gold -= cost; p.perks[m.perk] = owned + 1; if (m.perk === 'tough') p.hp = Math.min(effMaxHp(p), p.hp + PERK_FX.hp); send(ws, { t: 'ev', kind: 'boughtperk', perk: m.perk, lvl: owned + 1, cost }); break; }
-    case 'buyweapon': { const p = players.get(id); if (!p || !WEAPON_BUY[m.w]) break; const nearArmory = Math.hypot(p.x - CAMP.armory.x, p.z - CAMP.armory.z) <= CAMP.armory.r; if ((phase === 'intermission' || (phase === 'combat' && nearArmory))) { const cost = WEAPON_BUY[m.w]; if (p.gold >= cost && p.wep !== m.w) { p.gold -= cost; p.wep = m.w; send(ws, { t: 'ev', kind: 'boughtweapon', w: m.w }); } } break; }
+    case 'buyperk': { const p = players.get(id); if (!p || !PERK_BUY[m.perk]) break; if (phase !== 'combat' && phase !== 'intermission') break; const near = Math.hypot(p.x - CAMP.armorer.x, p.z - CAMP.armorer.z) <= CAMP.armorer.r + 1.5; if (!near) break; const owned = p.perks[m.perk] || 0; if (owned >= PERK_MAX) break; const cost = PERK_BUY[m.perk] * (owned + 1); if (p.gold < cost) break; p.gold -= cost; p.perks[m.perk] = owned + 1; if (m.perk === 'tough') p.hp = Math.min(effMaxHp(p), p.hp + PERK_FX.hp); send(ws, { t: 'ev', kind: 'boughtperk', perk: m.perk, lvl: owned + 1, cost, gold: p.gold }); break; }
+    case 'buyweapon': { const p = players.get(id); if (!p || !WEAPON_BUY[m.w]) break; const nearArmory = Math.hypot(p.x - CAMP.armory.x, p.z - CAMP.armory.z) <= CAMP.armory.r; if ((phase === 'intermission' || (phase === 'combat' && nearArmory))) { const cost = WEAPON_BUY[m.w]; if (p.gold >= cost && p.wep !== m.w) { p.gold -= cost; p.wep = m.w; send(ws, { t: 'ev', kind: 'boughtweapon', w: m.w, gold: p.gold }); } } break; }
     case 'buycosmetic': { const p = players.get(id); if (!p) break; if (phase !== 'combat' && phase !== 'intermission') break; const near = Math.hypot(p.x - CAMP.cosmetics.x, p.z - CAMP.cosmetics.z) <= CAMP.cosmetics.r + 1.5; if (!near) break; const slot = m.slot; if (!COSMETIC_SLOTS.includes(slot)) break; const item = (COSMETICS[slot] || []).find(c => c.id === m.id); if (!item) break; const key = slot + ':' + item.id; const owns = item.cost === 0 || p.cosOwned.includes(key); if (!owns) { if (p.gold < item.cost) break; p.gold -= item.cost; p.cosOwned.push(key); } p.cos[slot] = item.id; broadcastRoster(); send(ws, { t: 'ev', kind: 'boughtcosmetic', slot, id: item.id, owned: p.cosOwned, gold: p.gold }); break; }
     case 'start': if (isDefender(id) && phase === 'lobby') startRound(1); break;
     case 'nextround': if (isDefender(id) && phase === 'intermission') startRound(round + 1); break;
@@ -245,6 +251,7 @@ function rallyCommand(g) {
 function startRound(n) {
   if (n === 1 && !general) electGeneral();   // crown the voted General as the game begins
   round = n; phase = 'combat'; phaseEndsAt = now() + combatMs; lastWaveAt = now();
+  gate.hp = gate.maxHp; king.hp = king.maxHp; king.alive = true; king.gateOpen = false;   // fresh gate + full King each round (rounds 2+ must not start pre-breached)
   for (const p of players.values()) { const [x, z] = playerSpawn(); p.x = x; p.z = z; p.hp = effMaxHp(p); p.alive = true; }
   ram = { built: false, active: false, x: 0, z: RAM.startZ, bw: 0, bi: 0 };   // fresh ram frame each round
   troops.clear(); friendlies.clear(); spawnWave(waveSize());   // cannon + camp builds PERSIST across rounds (permanent upgrades)
@@ -438,12 +445,13 @@ function resetGame() {
 // ---------- tick ----------
 let last = Date.now();
 let _hAcc = 0, _hMax = 0, _hN = 0, _hLast = Date.now(), snapN = 0;
-setInterval(() => {
+setInterval(() => { try {
   const _hStart = performance.now();
   const t = now(); const dt = Math.min(0.1, (t - last) / 1000); last = t;
   if (wizard) wizard.mana = Math.min(WIZARD.maxMana, wizard.mana + WIZARD.manaRegen * dt);
   const combat = phase === 'combat';
   if (phase === 'lobby') ensureBallot();
+  if (combat && players.size === 0) { if (!emptyCombatSince) emptyCombatSince = Date.now(); else if (Date.now() - emptyCombatSince > 5000) { emptyCombatSince = 0; resetGame(); return; } } else emptyCombatSince = 0;
   if (combat && t >= phaseEndsAt && king.alive) endRoundToIntermission();
   else if (phase === 'intermission' && t >= phaseEndsAt) startRound(round + 1);
   else if (phase === 'over' && t >= phaseEndsAt) resetGame();   // after game over, auto-return to lobby so the next match can start
@@ -451,7 +459,7 @@ setInterval(() => {
   // King / Wizard positions are now CLIENT-AUTHORITATIVE (see 'kpos' / 'wpos' handlers); no server integration.
   for (const tr of trees.values()) if (!tr.alive && t >= tr.regrowAt) { tr.alive = true; tr.hp = TREE.hp; }
   for (const o of irons.values()) if (!o.alive && t >= o.regrowAt) { o.alive = true; o.hp = IRON.hp; }
-  if (combat && gateUp() && king.alive && king.hp < king.maxHp) king.hp = Math.min(king.maxHp, king.hp + king.maxHp * KING.regenFrac * dt);   // regen while shielded behind the closed gate
+  if (combat && gateUp() && king.alive && king.hp < king.maxHp) king.hp = Math.min(king.maxHp, king.hp + king.maxHp * KING.regenFrac * tune.kingRegen * dt);   // regen while shielded behind the closed gate
   if (combat && t - lastWaveAt > WAVE.intervalMs / tune.waveRate) { lastWaveAt = t; spawnWave(waveSize()); }
 
   const up = gateUp();
@@ -586,7 +594,7 @@ setInterval(() => {
   });
   const _hd = performance.now() - _hStart; _hAcc += _hd; if (_hd > _hMax) _hMax = _hd; _hN++;
   if (Date.now() - _hLast >= 5000) { console.log(`[health] players=${players.size} clients=${clients.size}  tick avg=${(_hAcc / _hN).toFixed(2)}ms max=${_hMax.toFixed(2)}ms  budget=${TICK_MS}ms`); _hAcc = 0; _hMax = 0; _hN = 0; _hLast = Date.now(); }
-}, TICK_MS);
+} catch (e) { console.error('[tick error]', e && e.stack || e); } }, TICK_MS);
 
 server.listen(PORT, () => {
   const ips = []; for (const iface of Object.values(os.networkInterfaces())) for (const a of iface) if (a.family === 'IPv4' && !a.internal) ips.push(a.address);

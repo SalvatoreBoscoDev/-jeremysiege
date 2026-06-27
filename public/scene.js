@@ -359,7 +359,8 @@ export function createWorld(canvas, opts = {}) {
   const tBodyMat = new THREE.MeshStandardMaterial({ roughness: 0.6, emissive: 0x2a0000, emissiveIntensity: 0.4 });
   const tHeadGeo = new THREE.SphereGeometry(0.55, 8, 8);
   const tHeadMat = new THREE.MeshStandardMaterial({ color: 0x6a2a1a, roughness: 0.7 });
-  const troopBody = new THREE.InstancedMesh(tBodyGeo, tBodyMat, MAX_TROOPS); troopBody.count = 0; troopBody.frustumCulled = false; troopBody.castShadow = false;   // many instanced troops -> skip their shadow casting (big perf win) troopBody.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_TROOPS * 3), 3); scene.add(troopBody);
+  const troopBody = new THREE.InstancedMesh(tBodyGeo, tBodyMat, MAX_TROOPS); troopBody.count = 0; troopBody.frustumCulled = false; troopBody.castShadow = false;   // skip shadow casting (perf)
+  troopBody.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_TROOPS * 3), 3); scene.add(troopBody);
   const troopHead = new THREE.InstancedMesh(tHeadGeo, tHeadMat, MAX_TROOPS); troopHead.count = 0; troopHead.frustumCulled = false; scene.add(troopHead);
   const tHelmGeo = new THREE.ConeGeometry(0.62, 0.7, 8); const tHelmMat = new THREE.MeshStandardMaterial({ color: 0x3a3b46, metalness: 0.72, roughness: 0.34 });
   const troopHelm = new THREE.InstancedMesh(tHelmGeo, tHelmMat, MAX_TROOPS); troopHelm.count = 0; troopHelm.frustumCulled = false; troopHelm.castShadow = false; scene.add(troopHelm);

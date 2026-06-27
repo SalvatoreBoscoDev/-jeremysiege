@@ -228,8 +228,10 @@ export const TUNE = {
   troopDmg:  { label: 'Troop Damage',  min: 0.2, max: 4, step: 0.1 },
   playerDmg: { label: 'Player Damage', min: 0.2, max: 4, step: 0.1 },
   waveRate:  { label: 'Wave Speed',    min: 0.5, max: 3, step: 0.1 },
+  general:   { label: 'General Power', min: 0.3, max: 3, step: 0.1 },
+  kingRegen: { label: 'King Regen',    min: 0,   max: 4, step: 0.1 },
 };
-export const TUNE_ORDER = ['kingHp', 'gateHp', 'waveSize', 'troopDmg', 'playerDmg', 'waveRate'];
+export const TUNE_ORDER = ['kingHp', 'gateHp', 'waveSize', 'troopDmg', 'playerDmg', 'waveRate', 'general', 'kingRegen'];
 
 export function clampToLane(x, z, zMin) {
   const lo = (zMin != null) ? zMin : LANE.minZ;

@@ -40,7 +40,7 @@
   #abilityBtn.ready { border-color:var(--green); box-shadow:0 0 22px #9be36a77,0 6px 20px rgba(0,0,0,.45); }
   #abilityBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.66); pointer-events:none; }
   #abilityBtn .an { position:relative; font-size:13px; line-height:1.1; padding:0 4px; letter-spacing:.3px; } #abilityBtn .ak { position:relative; font-size:10px; opacity:.7; letter-spacing:1px; }
-  #cmdBtn { position:fixed; bottom:128px; left:50%; transform:translateX(-50%); width:76px; height:76px; border-radius:50%; background:radial-gradient(circle at 50% 38%,rgba(70,40,90,.85),rgba(20,8,30,.7)); border:3px solid var(--gold); color:#fff; font-weight:900; text-align:center; display:none; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; box-shadow:0 0 22px #ffd23f55,0 6px 18px rgba(0,0,0,.5); z-index:6; }
+  #cmdBtn { position:fixed; bottom:206px; right:14px; width:76px; height:76px; border-radius:50%; background:radial-gradient(circle at 50% 38%,rgba(70,40,90,.85),rgba(20,8,30,.7)); border:3px solid var(--gold); color:#fff; font-weight:900; text-align:center; display:none; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; cursor:pointer; user-select:none; overflow:hidden; text-shadow:0 1px 3px #000; box-shadow:0 0 22px #ffd23f55,0 6px 18px rgba(0,0,0,.5); z-index:6; }
   #cmdBtn .cdfill { position:absolute; left:0; right:0; bottom:0; height:100%; background:rgba(0,0,0,.62); pointer-events:none; }
   #cmdBtn .cn { position:relative; font-size:20px; } #cmdBtn .ct { position:relative; font-size:10px; letter-spacing:.5px; }
   #vote { position:fixed; left:0; right:0; bottom:150px; z-index:8; display:none; flex-direction:column; align-items:center; gap:9px; padding:0 12px; pointer-events:auto; }
@@ -139,7 +139,7 @@ const params = new URLSearchParams(location.search); const preName = params.get(
 if (preName) $('#name').value = preName;
 let myAbility = ABILITIES[preClass] || ABILITIES.blaster;   // active ability FOLLOWS the equipped weapon (buy a weapon = its ability)
 let myAbilityAt = 0, dashUntil = 0;
-let myVote=null, cmdAt=0; const CMD_CD=22000;   // General vote choice + Rally command cooldown (mirrors server)
+let myVote=null, cmdAt=0, voteSig=''; const CMD_CD=22000;   // General vote choice + Rally command cooldown (mirrors server)
 $('#abilityBtn .an').textContent = myAbility.name;
 function useCommand(){
   if(!net.ready || !lastSnap || lastSnap.phase!=='combat' || lastSnap.general!==myId) return;
@@ -148,7 +148,9 @@ function useCommand(){
 }
 function renderVote(m){
   const v=$('#vote'); const show = m.phase==='lobby' && m.ballot && m.ballot.length;
-  v.style.display = show?'flex':'none'; if(!show) return;
+  if(!show){ if(v.style.display!=='none'){ v.style.display='none'; voteSig=''; } return; }
+  const sig = JSON.stringify(m.ballot)+'|'+myVote; if(sig===voteSig) return; voteSig=sig;   // only rebuild when tallies / your vote change (not every frame)
+  v.style.display='flex';
   v.innerHTML = '<div class="vt">👑 VOTE YOUR GENERAL</div><div class="vc">' +
     m.ballot.map(([cid,name,tally])=>`<div class="cand${myVote===cid?' mine':''}" data-c="${cid}"><div class="nm">${name}</div><div class="vn">${tally} vote${tally===1?'':'s'}</div></div>`).join('') + '</div>';
   v.querySelectorAll('.cand').forEach(c=>c.onclick=()=>{ myVote=+c.dataset.c; net.send({t:'vote',cand:myVote}); Sound.buy(); });
@@ -171,8 +173,8 @@ const net = connect({
     if(ev.kind==='round'){ banner('ROUND '+ev.round+' / '+ev.total, '#ffd23f'); Sound.round(); }
     else if(ev.kind==='intermission'){ banner('INTERMISSION - visit the camp stalls', '#8fe3ff', 2600); Sound.intermission(); }
     else if(ev.kind==='gatebreached'){ banner('GATE DOWN!', '#ff7adf'); Sound.gateBreach(); }
-    else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); Sound.buy(); }
-    else if(ev.kind==='boughtweapon'){ renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); Sound.buy(); }
+    else if(ev.kind==='boughtperk'){ myPerks[ev.perk]=ev.lvl; if(typeof ev.gold==='number') myGold=ev.gold; refreshShop(); banner((perksCat&&perksCat[ev.perk]||{}).name+' Lv'+ev.lvl+'!','#9be36a',900); Sound.buy(); }
+    else if(ev.kind==='boughtweapon'){ if(typeof ev.gold==='number') myGold=ev.gold; renderWep(ev.w); banner('Bought '+((weapons[ev.w]||{}).name||ev.w)+'!','#ffd23f',1100); Sound.buy(); }
     else if(ev.kind==='boughtcosmetic'){ myCos[ev.slot]=ev.id; myCosOwned=ev.owned||myCosOwned; if(typeof ev.gold==='number') myGold=ev.gold; refreshCosmetics(); banner('Looking good!','#ff8ad6',800); Sound.buy(); }
     else if(ev.kind==='built'){ Sound.build(); }
     else if(ev.kind==='general'){ banner((ev.name||'A hero')+' is crowned GENERAL! 👑', '#ffd23f', 2600); Sound.round(); }
