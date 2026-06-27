@@ -24,7 +24,11 @@ const bots = [];
 function spawnBot(i) {
   let ws;
   try { ws = new WebSocket(URL); } catch { errors++; return; }
-  const bot = { ws, x: (Math.random() - 0.5) * 30, z: 108 + Math.random() * 14, a: Math.PI };
+  const mode = (i % 4 < 2) ? 'jeremy' : (i % 4 === 2) ? 'mine' : 'random';   // 50% charge Jeremy, 25% to the iron mine, 25% random "whatever"
+  const bot = { ws, x: (Math.random() - 0.5) * 30, z: 108 + Math.random() * 14, a: Math.PI, mode,
+    dest: mode === 'jeremy' ? { x: (Math.random() - 0.5) * 40, z: -50 }            // straight down the lane to the castle wall
+        : mode === 'mine'   ? { x: 30 + Math.random() * 16, z: 95 + Math.random() * 30 }  // the IRON pocket (right side)
+        : null };
   bots.push(bot);
   ws.on('open', () => { opened++; ws.send(JSON.stringify({ t: 'join', role: 'player', name: 'bot' + i, class: CLASSES[i % 5] })); });
   ws.on('message', (d) => { msgs++; bytes += (d.length || Buffer.byteLength(d)); try { if (JSON.parse(d).t === 'welcome') joined++; } catch {} });
@@ -33,10 +37,17 @@ function spawnBot(i) {
 }
 
 // Movement load: every bot reports a new position ~18x/sec (same cadence as the real client).
+const STEP = 18 * 0.055;   // ~player walk speed per 55ms tick — smooth straight-line travel toward the destination
 setInterval(() => {
   for (const b of bots) {
     if (b.ws.readyState !== 1) continue;
-    b.x += (Math.random() - 0.5) * 5; b.z += (Math.random() - 0.5) * 5; b.a = Math.random() * 6.283;
+    if (b.dest) {
+      const dx = b.dest.x - b.x, dz = b.dest.z - b.z, d = Math.hypot(dx, dz);
+      if (d > 0.6) { b.x += (dx / d) * STEP; b.z += (dz / d) * STEP; b.a = Math.atan2(dx, dz); }   // glide in a straight line
+      else { b.x += (Math.random() - 0.5) * 0.4; b.z += (Math.random() - 0.5) * 0.4; }              // arrived: small jiggle (mining / shoving the gate)
+    } else {
+      b.x += (Math.random() - 0.5) * 5; b.z += (Math.random() - 0.5) * 5; b.a = Math.random() * 6.283;   // the "whatever" quarter: random walk
+    }
     b.ws.send(JSON.stringify({ t: 'pos', x: +b.x.toFixed(2), z: +b.z.toFixed(2), a: b.a }));
   }
 }, 55);
